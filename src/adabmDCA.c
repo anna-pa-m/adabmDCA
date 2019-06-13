@@ -38,7 +38,7 @@ struct Params {
 	.file_samples = 0,
 	.Nmc_starts = 1000,
 	.Nmc_config = 50,
-	.w_th = 0.1,
+	.w_th = 0.2,
 	.num_threads = 1,
 	.Twait = 500,
 	.Teq = 1000,
@@ -1299,10 +1299,9 @@ int gibbs_step(int * curr_state)
 int mc_chain(int *curr_state)
 {
 	int t = 0,n,i;
-	FILE * fp;
-	if(print_samples) 
+	FILE * fp = 0;
+	if(print_samples)
 		fp  = fopen(params.file_samples, "a");
-	
 	if(params.Gibbs)
 		gibbs_en = energy(curr_state);
 	while(t <= params.Teq) {
@@ -1323,13 +1322,16 @@ int mc_chain(int *curr_state)
 		}
 		update_statistics(curr_state);
 		if(print_samples) {
-			for(i = 0; i < L; i++) 
+			for(i = 0; i < L; i++)
 				fprintf(fp, "%d ", curr_state[i]);
 			fprintf(fp, "\n");
+			fflush(fp);
 		}
 		if(compute_tm)
 			update_tm_statistics(curr_state);
-	}	
+	}
+	if(print_samples)
+		fclose(fp);
 	return 0;
 
 }
