@@ -13,7 +13,7 @@
 // files and parameters
 struct Params {
 
-	char * file_msa, * file_w , * file_params, init, * label, * ctype, * file_3points, *file_cc, *file_samples;
+	char * file_msa, * file_w , * file_params, init, * label, * ctype, * file_3points, *file_cc, *file_samples, *file_en;
 	bool Metropolis, Gibbs, dgap, gapnn, empdec, phmm;
 	double sparsity, rho, w_th,  regJ, lrate, conv, pseudocount;
 	int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, num_threads, Nmc_config, Nmc_config_max, Twait_max, Twait, maxiter;
@@ -89,6 +89,7 @@ double gibbs_en = 0.0, averrh, averrJ, merrh, merrJ, errnorm, model_sp;
 int iter = 0;
 bool compute_tm = false;
 bool print_samples = false;
+bool print_en = false;
 int ntm = 0;
 double Meff;
 
@@ -138,7 +139,7 @@ int main(int argc, char ** argv)
 	char third[1000];
 	char par[1000];
 	char sc;
-	while ((c = getopt(argc, argv, "y:b:f:w:l:s:n:m:p:j:t:i:r:a:c:z:g:e:k:x:S:d:T:C:MGIRhDNEH")) != -1) {
+	while ((c = getopt(argc, argv, "y:b:f:w:l:s:n:m:p:j:t:i:r:a:c:z:g:e:k:x:S:d:T:C:MGIRhDNE:HP")) != -1) {
 		switch (c) {
 			case 'b':
 				params.ctype = optarg;
@@ -156,6 +157,9 @@ int main(int argc, char ** argv)
 				params.file_samples = optarg;
 				break;
 			case 'E':
+				params.file_en = optarg;
+				break;
+			case 'P':
 				params.empdec = true;
 				break;
 			case 'H':
@@ -244,6 +248,8 @@ int main(int argc, char ** argv)
 				fprintf(stdout, "-d : Pseudo-count, default: 1/M \n");
 				fprintf(stdout, "-b : Alphabet. a : amino-acids. n : nucleic acids. i : present/absent. Default: a\n");
 				fprintf(stdout, "-w : (optional file) weights file\n");
+				fprintf(stdout, "-S : (optional file) file name in which print configurations at convergence\n");
+				fprintf(stdout, "-E : (optional file) file name in which print energy's configurations at convergence");
 				fprintf(stdout, "-T : (optional file) (i j k a b c) indices for third order correlations\n");
 				fprintf(stdout, "-C : (optional file) (i j a b corr) given graph for correlations compressed\n");
 				fprintf(stdout, "-l : Threshold for computing weigts, default: %.1f\n", params.w_th);
@@ -256,7 +262,7 @@ int main(int argc, char ** argv)
 				fprintf(stdout, "-M : (flag) Using Metropolis-Hastings sampling\n");
 				fprintf(stdout, "-D : (flag) Only first moments of gap statistics are fitted\n");
 				fprintf(stdout, "-N : (flag) Fit first moments and nearest-neighbors second moments gap statistics\n");
-				fprintf(stdout, "-E : (flag) Decimate J(i,j,a,b) looking at min(sec. mom., parameter)\n");
+				fprintf(stdout, "-P : (flag) Decimate J(i,j,a,b) looking at min(sec. mom., parameter)\n");
 				fprintf(stdout, "-H : (flag) Hmmer-like model: profile + couplings(gap, gap) for nearest-neighbours\n");
 				fprintf(stdout, "-y : Seed of random number generator, default: %d\n", params.seed);
 				fprintf(stdout, "-s : Metropolis chains, default: %d\n", params.Nmc_starts);
@@ -373,6 +379,8 @@ int main(int argc, char ** argv)
 	load_third_order_indices();
 	if(params.file_samples)
 		print_samples = true;
+	if(params.file_en)
+		print_en = true;
 	init_statistics();
 	sample(); // compute 3rd order moments through sampling and possibly print the sequences
 	if(compute_tm)
@@ -1299,9 +1307,11 @@ int gibbs_step(int * curr_state)
 int mc_chain(int *curr_state)
 {
 	int t = 0,n,i;
-	FILE * fp = 0;
+	FILE * fp = 0, * fe = 0;
 	if(print_samples)
 		fp  = fopen(params.file_samples, "a");
+	if(print_en)
+		fe = fopen(params.file_en, "a");
 	if(params.Gibbs)
 		gibbs_en = energy(curr_state);
 	while(t <= params.Teq) {
@@ -1327,11 +1337,15 @@ int mc_chain(int *curr_state)
 			fprintf(fp, "\n");
 			fflush(fp);
 		}
+		if(print_en)
+			fprintf(fe, "%lf\n", energy(curr_state));
 		if(compute_tm)
 			update_tm_statistics(curr_state);
 	}
 	if(print_samples)
 		fclose(fp);
+	if(print_en)
+		fclose(fe);
 	return 0;
 
 }
