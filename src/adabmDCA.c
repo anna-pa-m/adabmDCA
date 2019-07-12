@@ -811,15 +811,15 @@ int compute_empirical_statistics()
 		for(j = i+1; j < L; j++) {
 			for (a = 0; a < q; a++) {
 				for(b = 0; b < q; b++) {
-					sm[i*q+a][j*q+b] = (sm[i*q+a][j*q+b] == 0) ? params.pseudocount : sm[i*q+a][j*q+b]/Meff;
+					sm[i*q+a][j*q+b] = (sm[i*q+a][j*q+b] == 0) ? params.pseudocount : sm[i*q+a][j*q+b] / Meff + params.pseudocount;
 					sm[j*q+b][i*q+a] = sm[i*q+a][j*q+b];
 				}
 			}
 		}
 	}
 	for(i = 0; i < L*q; i++) {
-		sm[i][i] = (sm[i][i] == 0) ? params.pseudocount : sm[i][i] /Meff;
-		fm[i] = (fm[i] == 0) ? params.pseudocount : fm[i]/Meff;
+		sm[i][i] = (sm[i][i] == 0) ? params.pseudocount : sm[i][i] / Meff + params.pseudocount;
+		fm[i] = (fm[i] == 0) ? params.pseudocount : fm[i] / Meff + params.pseudocount;
 	}
 
 	for(i = 0; i < L; i++) {
