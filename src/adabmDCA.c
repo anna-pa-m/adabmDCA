@@ -83,6 +83,11 @@ double * fb;
 double * fi;
 double * mean_ai;
 double * mean_aj;
+int * chain_1;
+int * chain_2;
+int * intra_chain;
+int idx_chain_1, idx_chain_2;
+double en_init = 0, en_first = 0, en_intra = 0;
 
 int q = 21, L, M;
 double gibbs_en = 0.0, averrh, averrJ, merrh, merrJ, errnorm, model_sp;
@@ -108,7 +113,7 @@ int print_model(char * filename);
 int print_msa(char * filename);
 int print_statistics(char * file_sm, char *file_fm, char *file_tm);
 int sample();
-int mc_chain(int *curr_state);
+int * mc_chain(int *curr_state, bool test_chain);
 int gibbs_step(int *curr_state);
 int metropolis_step(int * curr_state);
 void permute(int * vector, int s);
@@ -128,6 +133,8 @@ int decimate(int c);
 int quicksort(double *x, int *tmp_idx, int first, int last);
 int load_third_order_indices();
 int compute_third_order_correlations();
+int equilibration_test();
+
 
 int main(int argc, char ** argv)
 {
@@ -349,6 +356,7 @@ int main(int argc, char ** argv)
 	while(!conv && iter < params.maxiter) {
 		init_statistics();
 		sample();
+		equilibration_test();
 		update_parameters(params.regJ);
 		if(model_sp < params.sparsity && iter % 10 == 0) {
 			fprintf(stdout, "Decimating..");
@@ -359,7 +367,7 @@ int main(int argc, char ** argv)
 		if(model_sp >= params.sparsity && params.sparsity > 0 && check_convergence())
 			conv = true;
 		if(iter % params.nprint == 0) {
-			fprintf(stdout, "it: %i N: %i x %i Twait: %i merr_fm: %.3e merr_sm: %.3e averr_fm: %.3e averr_sm: %.3e cov_err: %.3e corr: %.2f sp: %.2e\n", iter, params.Nmc_config, params.Nmc_starts, params.Twait, merrh, merrJ, averrh, averrJ, errnorm, pearson(), model_sp);
+			fprintf(stdout, "it: %i N: %i Teq: %i Twait: %i merr_fm: %.3e merr_sm: %.3e averr_fm: %.3e averr_sm: %.3e cov_err: %.3e corr: %.2f sp: %.2e\n", iter, params.Nmc_config * params.Nmc_starts, params.Teq, params.Twait, merrh, merrJ, averrh, averrJ, errnorm, pearson(), model_sp);
 			fflush(stdout);
 		}
 		if(iter % params.nprintfile == 0) {
@@ -662,7 +670,8 @@ int load_third_order_indices()
 }
 
 
-int compute_third_order_correlations() {
+int compute_third_order_correlations() 
+{
 	int ind, i, j, k, a, b, c;
 	for(ind = 0; ind < ntm; ind++) {
 		i = tm_index[ind][0];
@@ -674,9 +683,7 @@ int compute_third_order_correlations() {
 		tm[ind] = tm[ind] - sm[i*q+a][j*q+b]*fm[k*q+c] - sm[i*q+a][k*q+c]*fm[j*q+b] - sm[j*q+b][k*q+c]*fm[i*q+a] + 2*fm[i*q+a]*fm[j*q+b]*fm[k*q+c];
 		tm_s[ind] = tm_s[ind] - sm_s[i*q+a][j*q+b]*fm_s[k*q+c] - sm_s[i*q+a][k*q+c]*fm_s[j*q+b] - sm_s[j*q+b][k*q+c]*fm_s[i*q+a] + 2*fm_s[i*q+a]*fm_s[j*q+b]*fm_s[k*q+c]; 
 	}
-	
 	return 0;
-	
 }
 int compute_w()
 {
@@ -785,6 +792,9 @@ int alloc_structures()
 	fi = (double *)calloc(L, sizeof(double));
 	mean_ai = (double *)calloc(q, sizeof(double));
 	mean_aj = (double *)calloc(q, sizeof(double));
+	chain_1 = (int *)calloc(L, sizeof(int));
+	chain_2 = (int *)calloc(L, sizeof(int));
+	intra_chain = (int *)calloc(L, sizeof(int));
 	return 0;
 }
 
@@ -1237,15 +1247,54 @@ int initialize_parameters()
 int sample()
 {
 	int t, i, s;
-	int Neff = ceil((1.0*params.Nmc_starts) / params.num_threads);
+	bool test_chain;
+	//int Neff = ceil((1.0*params.Nmc_starts) / params.num_threads);
+	idx_chain_1 = (int)rand() % params.Nmc_starts;
+	idx_chain_2 = (int)rand() % params.Nmc_starts;
+	while(idx_chain_1 == idx_chain_2)
+		idx_chain_2 = (int)rand() % params.Nmc_starts;
 //#pragma omp parallel for private(i,s)
 	for(t = 0; t < params.num_threads; t++) {
-		for(s = 0; s < Neff; s++) {
+		for(s = 0; s < params.Nmc_starts; s++) {
 			int x[L];
+			int *aux;
 			for(i = 0; i < L; i++)
 				x[i] = (int)rand() % q;
-			mc_chain(x);
+			if(s == idx_chain_1)
+				test_chain = true;
+			else
+				test_chain = false;
+			aux = mc_chain(x, test_chain);
+			if(s == idx_chain_1) {
+				for(i = 0; i < L; i++)
+					chain_1[i] = aux[i];
+			}
+			if(s == idx_chain_2) {
+				for(i = 0; i < L; i++)
+					chain_2[i] = aux[i];
+			}
 		}
+	}
+	return 0;
+}
+
+int equilibration_test() 
+{
+
+	int q_int_chain = 0, q_ext_chain = 0;
+	int i;
+	for(i = 0; i < L; i++) {
+		if(chain_1[i] == chain_2[i])
+			q_ext_chain++;
+		if(intra_chain[i] == chain_1[i])
+			q_int_chain++;
+	}
+	printf("q_int_chain %i, q_ext_chain %i en_0: %f en_first: %f en_intra %f\n", q_int_chain, q_ext_chain, en_init, en_first, en_intra);
+	if(q_int_chain > q_ext_chain)
+		params.Twait *= 1.05;
+	//if(fabs((en_first - en_intra)/ en_intra) >= fabs((en_init - en_first) / en_first) ) {
+	if(fabs(en_first - en_intra) >= fabs(en_init - en_first) ) {
+		params.Teq *= 1.05;
 	}
 	return 0;
 }
@@ -1304,7 +1353,7 @@ int gibbs_step(int * curr_state)
 	return 0;
 }
 
-int mc_chain(int *curr_state)
+int * mc_chain(int *curr_state, bool test_chain)
 {
 	int t = 0,n,i;
 	FILE * fp = 0, * fe = 0;
@@ -1314,6 +1363,7 @@ int mc_chain(int *curr_state)
 		fe = fopen(params.file_en, "a");
 	if(params.Gibbs)
 		gibbs_en = energy(curr_state);
+	en_init = energy(curr_state);
 	while(t <= params.Teq) {
 		t++;
 		if(params.Metropolis)
@@ -1322,6 +1372,8 @@ int mc_chain(int *curr_state)
 			gibbs_step(curr_state);
 	}
 	for(n = 0; n < params.Nmc_config; n++) {
+		if(n == 0)
+			en_first = energy(curr_state);
 		t = 0;
 		while(t <= params.Twait) {
 			t++;
@@ -1331,6 +1383,11 @@ int mc_chain(int *curr_state)
 				gibbs_step(curr_state);
 		}
 		update_statistics(curr_state);
+		if(test_chain == true && n == params.Nmc_config/2) {
+			en_intra = energy(curr_state);
+			for(i = 0; i < L; i++)
+				intra_chain[i] = curr_state[i];
+		}
 		if(print_samples) {
 			for(i = 0; i < L; i++)
 				fprintf(fp, "%d ", curr_state[i]);
@@ -1346,7 +1403,7 @@ int mc_chain(int *curr_state)
 		fclose(fp);
 	if(print_en)
 		fclose(fe);
-	return 0;
+	return curr_state;
 
 }
 
