@@ -16,7 +16,7 @@ struct Params {
 	char * file_msa, * file_w , * file_params, init, * label, * ctype, * file_3points, *file_cc, *file_samples, *file_en;
 	bool Metropolis, Gibbs, dgap, gapnn, empdec, phmm;
 	double sparsity, rho, w_th,  regJ, lrate, conv, pseudocount;
-	int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, num_threads, Nmc_config, Nmc_config_max, Twait_max, Twait, maxiter;
+	int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, num_threads, Nmc_config, Nmc_config_max, Tcheck, Twait_max, Twait, maxiter;
 } params = {
 	.phmm = false,
 	.ctype = 0,
@@ -29,7 +29,7 @@ struct Params {
 	.init = 'R',
 	.tau = 1000, // tau parameter for search and converge (learn_strat = 3)
 	.regJ = 0.0,
-	.lrate = 1e-1,
+	.lrate = 5e-2,
 	.conv = 8e-3,
 	.file_msa = 0,
 	.file_w = 0,
@@ -40,14 +40,15 @@ struct Params {
 	.Nmc_config = 50,
 	.w_th = 0.2,
 	.num_threads = 1,
-	.Twait = 500,
-	.Teq = 1000,
+	.Twait = 2000,
+	.Teq = 5000,
 	.maxiter = 2000,
 	.nprint = 100,
+	.Tcheck = 50,
 	.nprintfile = 500,
 	.Twait_max = 500,
 	.Nmc_config_max = 100,
-	.learn_strat = 3, // learning strategy: learning_rate / (1 + iter/tau)
+	.learn_strat = 0, // learning strategy: learning_rate / (1 + iter/tau)
 	.rho = 0.98, // adadelta reinforment
 	.Metropolis = true,
 	.Gibbs = false,
@@ -146,8 +147,11 @@ int main(int argc, char ** argv)
 	char third[1000];
 	char par[1000];
 	char sc;
-	while ((c = getopt(argc, argv, "y:b:f:w:l:s:n:m:p:j:t:i:r:a:c:z:g:e:k:x:S:d:T:C:MGIRhDNE:HP")) != -1) {
+	while ((c = getopt(argc, argv, "y:b:f:w:l:s:n:m:p:j:t:i:r:a:c:z:g:e:k:x:S:d:T:C:MGIRhDNE:HPq:")) != -1) {
 		switch (c) {
+			case 'q':
+				params.Tcheck = atoi(optarg);
+				break;
 			case 'b':
 				params.ctype = optarg;
 				break;
@@ -256,7 +260,7 @@ int main(int argc, char ** argv)
 				fprintf(stdout, "-b : Alphabet. a : amino-acids. n : nucleic acids. i : present/absent. Default: a\n");
 				fprintf(stdout, "-w : (optional file) weights file\n");
 				fprintf(stdout, "-S : (optional file) file name in which print configurations at convergence\n");
-				fprintf(stdout, "-E : (optional file) file name in which print energy's configurations at convergence");
+				fprintf(stdout, "-E : (optional file) file name in which print energy's configurations at convergence\n");
 				fprintf(stdout, "-T : (optional file) (i j k a b c) indices for third order correlations\n");
 				fprintf(stdout, "-C : (optional file) (i j a b corr) given graph for correlations compressed\n");
 				fprintf(stdout, "-l : Threshold for computing weigts, default: %.1f\n", params.w_th);
@@ -272,6 +276,7 @@ int main(int argc, char ** argv)
 				fprintf(stdout, "-P : (flag) Decimate J(i,j,a,b) looking at min(sec. mom., parameter)\n");
 				fprintf(stdout, "-H : (flag) Hmmer-like model: profile + couplings(gap, gap) for nearest-neighbours\n");
 				fprintf(stdout, "-y : Seed of random number generator, default: %d\n", params.seed);
+				fprintf(stdout, "-q : Perform equilibration check every %d iterations\n", params.Tcheck);
 				fprintf(stdout, "-s : Metropolis chains, default: %d\n", params.Nmc_starts);
 				fprintf(stdout, "-n : Number of MC configurations per chain, default: %d\n", params.Nmc_config);
 				fprintf(stdout, "-p : (optional file) Initial parameters J, h, default: random [-1e-3, 1e-3]\n");
@@ -356,7 +361,8 @@ int main(int argc, char ** argv)
 	while(!conv && iter < params.maxiter) {
 		init_statistics();
 		sample();
-		equilibration_test();
+		if(iter % params.Tcheck == 0)
+			equilibration_test();
 		update_parameters(params.regJ);
 		if(model_sp < params.sparsity && iter % 10 == 0) {
 			fprintf(stdout, "Decimating..");
@@ -1290,7 +1296,7 @@ int equilibration_test()
 			q_int_chain++;
 	}
 	printf("q_int_chain %i, q_ext_chain %i en_0: %f en_first: %f en_intra %f\n", q_int_chain, q_ext_chain, en_init, en_first, en_intra);
-	if(q_int_chain > q_ext_chain)
+	if(1.0*(q_int_chain - q_ext_chain)/L > 0.10)
 		params.Twait *= 1.05;
 	//if(fabs((en_first - en_intra)/ en_intra) >= fabs((en_init - en_first) / en_first) ) {
 	if(fabs(en_first - en_intra) >= fabs(en_init - en_first) ) {
