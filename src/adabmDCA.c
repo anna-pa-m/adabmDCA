@@ -147,9 +147,9 @@ int main(int argc, char ** argv)
 	char third[1000];
 	char par[1000];
 	char sc;
-	while ((c = getopt(argc, argv, "y:b:f:w:l:s:n:m:p:j:t:i:r:a:c:z:g:e:k:x:S:d:T:C:MGIRhDNE:HPq:")) != -1) {
+	while ((c = getopt(argc, argv, "y:b:f:w:l:s:n:m:p:j:t:i:r:a:c:z:g:e:k:x:S:d:T:C:MGIRhDNE:HPo:")) != -1) {
 		switch (c) {
-			case 'q':
+			case 'o':
 				params.Tcheck = atoi(optarg);
 				break;
 			case 'b':
@@ -276,7 +276,7 @@ int main(int argc, char ** argv)
 				fprintf(stdout, "-P : (flag) Decimate J(i,j,a,b) looking at min(sec. mom., parameter)\n");
 				fprintf(stdout, "-H : (flag) Hmmer-like model: profile + couplings(gap, gap) for nearest-neighbours\n");
 				fprintf(stdout, "-y : Seed of random number generator, default: %d\n", params.seed);
-				fprintf(stdout, "-q : Perform equilibration check every %d iterations\n", params.Tcheck);
+				fprintf(stdout, "-o : Perform equilibration check every %d iterations\n", params.Tcheck);
 				fprintf(stdout, "-s : Metropolis chains, default: %d\n", params.Nmc_starts);
 				fprintf(stdout, "-n : Number of MC configurations per chain, default: %d\n", params.Nmc_config);
 				fprintf(stdout, "-p : (optional file) Initial parameters J, h, default: random [-1e-3, 1e-3]\n");
@@ -1296,7 +1296,7 @@ int equilibration_test()
 			q_int_chain++;
 	}
 	printf("q_int_chain %i, q_ext_chain %i en_0: %f en_first: %f en_intra %f\n", q_int_chain, q_ext_chain, en_init, en_first, en_intra);
-	if(1.0*(q_int_chain - q_ext_chain)/L > 0.10)
+	if(1.0*(q_int_chain - q_ext_chain)/L > 0.05)
 		params.Twait *= 1.05;
 	//if(fabs((en_first - en_intra)/ en_intra) >= fabs((en_init - en_first) / en_first) ) {
 	if(fabs(en_first - en_intra) >= fabs(en_init - en_first) ) {
