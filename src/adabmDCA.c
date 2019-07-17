@@ -84,11 +84,14 @@ double * fb;
 double * fi;
 double * mean_ai;
 double * mean_aj;
-int * chain_1;
-int * chain_2;
+int * chain_init_1;
+int * chain_init_2;
+int * chain_fin_1;
+int * chain_fin_2;
 int * intra_chain;
+int * half_chain;
 int idx_chain_1, idx_chain_2;
-double en_init = 0, en_first = 0, en_intra = 0;
+
 
 int q = 21, L, M;
 double gibbs_en = 0.0, averrh, averrJ, merrh, merrJ, errnorm, model_sp;
@@ -114,7 +117,7 @@ int print_model(char * filename);
 int print_msa(char * filename);
 int print_statistics(char * file_sm, char *file_fm, char *file_tm);
 int sample();
-int * mc_chain(int *curr_state, bool test_chain);
+int * mc_chain(int *curr_state, bool test_chain_sampl, bool test_chain_half, int test_chain_eq);
 int gibbs_step(int *curr_state);
 int metropolis_step(int * curr_state);
 void permute(int * vector, int s);
@@ -798,8 +801,11 @@ int alloc_structures()
 	fi = (double *)calloc(L, sizeof(double));
 	mean_ai = (double *)calloc(q, sizeof(double));
 	mean_aj = (double *)calloc(q, sizeof(double));
-	chain_1 = (int *)calloc(L, sizeof(int));
-	chain_2 = (int *)calloc(L, sizeof(int));
+	chain_init_1 = (int *)calloc(L, sizeof(int));
+	chain_init_2 = (int *)calloc(L, sizeof(int));
+	half_chain = (int *)calloc(L, sizeof(int));
+	chain_fin_1 = (int *)calloc(L, sizeof(int));
+	chain_fin_2 = (int *)calloc(L, sizeof(int));
 	intra_chain = (int *)calloc(L, sizeof(int));
 	return 0;
 }
@@ -1253,7 +1259,9 @@ int initialize_parameters()
 int sample()
 {
 	int t, i, s;
-	bool test_chain;
+	int test_chain_eq;
+	bool test_chain_half;
+	bool test_chain_sampl;
 	//int Neff = ceil((1.0*params.Nmc_starts) / params.num_threads);
 	idx_chain_1 = (int)rand() % params.Nmc_starts;
 	idx_chain_2 = (int)rand() % params.Nmc_starts;
@@ -1264,20 +1272,27 @@ int sample()
 		for(s = 0; s < params.Nmc_starts; s++) {
 			int x[L];
 			int *aux;
+			test_chain_eq = 0;
 			for(i = 0; i < L; i++)
 				x[i] = (int)rand() % q;
-			if(s == idx_chain_1)
-				test_chain = true;
-			else
-				test_chain = false;
-			aux = mc_chain(x, test_chain);
+			if(s == idx_chain_1) {
+				test_chain_eq = 1;
+				test_chain_sampl = true;
+				test_chain_half = true;
+			} else {
+				test_chain_half = false;
+				test_chain_sampl = false;
+			}
+			if(s == idx_chain_2)
+				test_chain_eq = 2;
+			aux = mc_chain(x, test_chain_sampl, test_chain_half, test_chain_eq);
 			if(s == idx_chain_1) {
 				for(i = 0; i < L; i++)
-					chain_1[i] = aux[i];
+					chain_fin_1[i] = aux[i];
 			}
 			if(s == idx_chain_2) {
 				for(i = 0; i < L; i++)
-					chain_2[i] = aux[i];
+					chain_fin_2[i] = aux[i];
 			}
 		}
 	}
@@ -1288,18 +1303,27 @@ int equilibration_test()
 {
 
 	int q_int_chain = 0, q_ext_chain = 0;
+	int q_half_first = 0, q_first = 0;
 	int i;
 	for(i = 0; i < L; i++) {
-		if(chain_1[i] == chain_2[i])
+		if(chain_fin_1[i] == chain_fin_2[i])
 			q_ext_chain++;
-		if(intra_chain[i] == chain_1[i])
+		if(intra_chain[i] == chain_fin_1[i])
 			q_int_chain++;
+		if(half_chain[i] == chain_init_1[i])
+			q_half_first++;
+		if(chain_init_1[i] == chain_init_2[i])
+			q_first++;
 	}
-	printf("q_int_chain %i, q_ext_chain %i en_0: %f en_first: %f en_intra %f\n", q_int_chain, q_ext_chain, en_init, en_first, en_intra);
-	if(1.0*(q_int_chain - q_ext_chain)/L > 0.05)
+	printf("q_int_chain: %d q_ext_chain: %d\n", q_int_chain, q_ext_chain);
+	printf("q_half_fisrt: %d q_first: %d\n", q_half_first, q_first);
+	if(1.0*(q_int_chain - q_ext_chain)/L > 0.05) {
+		fprintf(stdout, "Increasing sampl. time: q(halftime config.(A),last config.(A)): %d q(last config.(A), last config.(B)): %d\n", q_int_chain, q_ext_chain);
 		params.Twait *= 1.05;
-	//if(fabs((en_first - en_intra)/ en_intra) >= fabs((en_init - en_first) / en_first) ) {
-	if(fabs(en_first - en_intra) >= fabs(en_init - en_first) ) {
+	
+	}
+	if(1.0*(q_half_first - q_first)/L > 0.05) {
+		fprintf(stdout,"Increasing eq. time: q(Teq/2(A), Teq(A)): %d q(Teq(A), Teq(B)): %d\n", q_half_first, q_first);
 		params.Teq *= 1.05;
 	}
 	return 0;
@@ -1359,7 +1383,7 @@ int gibbs_step(int * curr_state)
 	return 0;
 }
 
-int * mc_chain(int *curr_state, bool test_chain)
+int * mc_chain(int *curr_state, bool test_chain_sampl, bool test_chain_half, int test_chain_eq)
 {
 	int t = 0,n,i;
 	FILE * fp = 0, * fe = 0;
@@ -1369,17 +1393,25 @@ int * mc_chain(int *curr_state, bool test_chain)
 		fe = fopen(params.file_en, "a");
 	if(params.Gibbs)
 		gibbs_en = energy(curr_state);
-	en_init = energy(curr_state);
 	while(t <= params.Teq) {
 		t++;
+		if(test_chain_half && t == params.Teq/2)
+			for(i = 0; i < L; i++)
+				half_chain[i] = curr_state[i];
 		if(params.Metropolis)
 			metropolis_step(curr_state);
 		else
 			gibbs_step(curr_state);
 	}
 	for(n = 0; n < params.Nmc_config; n++) {
-		if(n == 0)
-			en_first = energy(curr_state);
+		if(n == 0 && test_chain_eq == 1) {
+			for(i = 0; i < L; i++)
+				chain_init_1[i] = curr_state[i];
+		}
+		if(n == 0 && test_chain_eq == 2) {
+			for(i = 0; i < L; i++)
+				chain_init_2[i] = curr_state[i];
+		}
 		t = 0;
 		while(t <= params.Twait) {
 			t++;
@@ -1389,8 +1421,7 @@ int * mc_chain(int *curr_state, bool test_chain)
 				gibbs_step(curr_state);
 		}
 		update_statistics(curr_state);
-		if(test_chain == true && n == params.Nmc_config/2) {
-			en_intra = energy(curr_state);
+		if(test_chain_sampl == true && n == params.Nmc_config/2) {
 			for(i = 0; i < L; i++)
 				intra_chain[i] = curr_state[i];
 		}
