@@ -1129,6 +1129,7 @@ int initialize_parameters()
 						h[i*q +a] = log(fm[i*q+a]);
 						mean_all += h[i*q+a];
 					}
+					mean_all /= q;
 					for(a = 0; a < q; a++)
 						h[i*q+a] -= mean_all;
 				}
