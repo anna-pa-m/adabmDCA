@@ -1115,12 +1115,14 @@ int initialize_parameters()
 				fprintf(stdout, "Random initialization, 1e-3 x rand(-1,1)...");
 				for(i = 0; i < L; i++) {
 					for(a = 0; a < q; a++) {
-						h[i*q + a] = 1e-3 * randrange(-1,1);
+						//h[i*q + a] = 1e-3 * randrange(-1,1);
 						J[i*q + a][i*q + a] = 0;
+						h[i*q + a] = 0.0;
 						for(j = i+1; j < L; j++) {
 							for (b = 0; b < q; b ++) {
-								J[i*q + a][j*q + b] = 1e-3 * randrange(-1,1);
+								J[i*q + a][j*q + b] = 0.0;
 								J[j*q + b][i*q + a] = J[i*q + a][j*q + b];
+								//J[i*q + a][j*q + b] = 1e-3 * randrange(-1,1);
 							}
 						}
 					}
