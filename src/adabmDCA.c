@@ -15,7 +15,7 @@ struct Params {
 
 	char * file_msa, * file_w , * file_params, init, * label, * ctype, * file_3points, *file_cc, *file_samples, *file_en;
 	bool Metropolis, Gibbs, dgap, gapnn, empdec, phmm;
-	double sparsity, rho, w_th,  regJ, lrate, conv, pseudocount;
+	double sparsity, rho, w_th,  regJ, lrateJ, lrateh, conv, pseudocount;
 	int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, num_threads, Nmc_config, Nmc_config_max, Tcheck, Twait_max, Twait, maxiter;
 } params = {
 	.phmm = false,
@@ -29,7 +29,8 @@ struct Params {
 	.init = 'R',
 	.tau = 1000, // tau parameter for search and converge (learn_strat = 3)
 	.regJ = 0.0,
-	.lrate = 5e-2,
+	.lrateJ = 5e-2,
+	.lrateh = 5e-2,
 	.conv = 8e-3,
 	.file_msa = 0,
 	.file_w = 0,
@@ -151,7 +152,7 @@ int main(int argc, char ** argv)
 	char third[1000];
 	char par[1000];
 	char sc;
-	while ((c = getopt(argc, argv, "y:b:f:w:l:s:n:m:p:j:t:i:r:a:c:z:g:e:k:x:S:d:T:C:MGIRhDNE:HPo:")) != -1) {
+	while ((c = getopt(argc, argv, "y:b:f:w:l:u:v:s:n:m:p:j:t:i:a:c:z:g:e:k:x:S:d:T:C:MGIRhDNE:HPo:")) != -1) {
 		switch (c) {
 			case 'o':
 				params.Tcheck = atoi(optarg);
@@ -222,8 +223,11 @@ int main(int argc, char ** argv)
 			case 'i':
 				params.maxiter = atoi(optarg);
 				break;
-			case 'r':
-				params.lrate = atof(optarg);
+			case 'u':
+				params.lrateJ = atof(optarg);
+				break;
+			case 'v':
+				params.lrateh = atof(optarg);
 				break;
 			case 'a':
 				params.learn_strat = atoi(optarg);
@@ -291,8 +295,10 @@ int main(int argc, char ** argv)
 				fprintf(stdout, "-i : Maximum number of iterations, default: %d\n", params.maxiter);
 				fprintf(stdout, "-z : Print output every x iterations, default: %d\n", params.nprint);
 				fprintf(stdout, "-m : Print Frobenius norms and parameters every x iterations, default: %d\n", params.nprintfile);
-				fprintf(stdout, "-r : Learning rate, default: %.e\n", params.lrate);
+				fprintf(stdout, "-u : Learning rate for couplings, default: %.e\n", params.lrateJ);
+				fprintf(stdout, "-v : Learning rate for fields, default: %.e\n", params.lrateh);
 				fprintf(stdout, "-a : Learning strategy.\n     0: standard gradient descent\n     1: adagrad\n     2. adadelta\n     3. search then converge\n     4. adam\n     Default: %d\n", params.learn_strat);
+				
 				return(EXIT_FAILURE);
 			default:
 				return(EXIT_FAILURE);
@@ -324,7 +330,7 @@ int main(int argc, char ** argv)
 	fprintf(stdout, "Learning strategy:\n");
 	switch(params.learn_strat) {
 		case 0:
-			fprintf(stdout, "Using standard gradient descent with constant learning rate %.3e\n", params.lrate);
+			fprintf(stdout, "Using standard gradient descent with constant learning rate (for J %.3e, for h %.3e)\n", params.lrateJ, params.lrateh);
 			break;
 		case 1:
 			fprintf(stdout, "Using adagrad\n");
@@ -333,7 +339,7 @@ int main(int argc, char ** argv)
 			fprintf(stdout, "Using adadelta with reinforcement %.2f\n", params.rho);
 			break;
 		case 3:
-			fprintf(stdout, "Using search and converge with decay time %d and learning rate %.3e\n", params.tau, params.lrate);
+			fprintf(stdout, "Using search and converge with decay time %d and learning rate (for J %.3e, for h %.3e)\n", params.tau, params.lrateJ, params.lrateh);
 			break;
 		case 4:
 			fprintf(stdout, "Using adam\n");
@@ -382,14 +388,14 @@ int main(int argc, char ** argv)
 		}
 		if(iter % params.nprintfile == 0) {
 			sc = (params.Gibbs == 0) ? 'M' : 'G';
-			sprintf(par, "Parameters_tmp_zerosum_%s_%c_%c_l%.1e_a%i.dat", params.label, sc, params.init, params.lrate, params.learn_strat);
-			sprintf(score, "Score_tmp_%s_%c_%c_l%.1e_a%i.dat", params.label, sc, params.init, params.lrate, params.learn_strat);
+			sprintf(par, "Parameters_tmp_zerosum_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
+			sprintf(score, "Score_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
 			compute_frobenius_norms(score, par);
-			sprintf(par, "Parameters_tmp_%s_%c_%c_l%.1e_a%i.dat", params.label, sc, params.init, params.lrate, params.learn_strat);
+			sprintf(par, "Parameters_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
 			print_model(par);
-			sprintf(sec, "Sec_mom_tmp_%s_%c_%c_l%.1e_a%i.dat", params.label, sc, params.init, params.lrate, params.learn_strat);
-			sprintf(first, "First_mom_tmp_%s_%c_%c_l%.1e_a%i.dat", params.label, sc, params.init, params.lrate, params.learn_strat);
-			sprintf(third, "Third_mom_tmp_%s_%c_%c_l%.1e_a%i.dat", params.label, sc, params.init, params.lrate, params.learn_strat);
+			sprintf(sec, "Sec_mom_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
+			sprintf(first, "First_mom_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
+			sprintf(third, "Third_mom_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
 			print_statistics(sec, first, third);
 		}
 		iter++;
@@ -404,14 +410,14 @@ int main(int argc, char ** argv)
 	if(compute_tm)
 		compute_third_order_correlations();
 	sc = (params.Gibbs == 0) ? 'M' : 'G';
-	sprintf(par, "Parameters_conv_zerosum_%s_%c_%c_l%.1e_a%i.dat", params.label, sc, params.init, params.lrate, params.learn_strat);
-	sprintf(score, "Score_%s_%c_%c_l%.1e_a%i.dat",params.label, sc, params.init, params.lrate, params.learn_strat);
+	sprintf(par, "Parameters_conv_zerosum_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
+	sprintf(score, "Score_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat",params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
 	compute_frobenius_norms(score, par);
-	sprintf(sec, "Sec_mom_conv_%s_%c_%c_l%.1e_a%i.dat", params.label, sc, params.init, params.lrate, params.learn_strat);
-	sprintf(first, "First_mom_conv_%s_%c_%c_l%.1e_a%i.dat", params.label, sc, params.init, params.lrate, params.learn_strat);
-	sprintf(third, "Third_order_connected_corr_%s_%c_%c_l%.1e_a%i.dat", params.label, sc, params.init, params.lrate, params.learn_strat);
+	sprintf(sec, "Sec_mom_conv_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
+	sprintf(first, "First_mom_conv_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
+	sprintf(third, "Third_order_connected_corr_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
 	print_statistics(sec, first, third);
-	sprintf(par, "Parameters_conv_%s_%c_%c_l%.1e_a%i.dat", params.label, sc, params.init, params.lrate, params.learn_strat);
+	sprintf(par, "Parameters_conv_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
 	print_model(par);
 	return 0;
 }
@@ -1482,12 +1488,12 @@ int update_parameters(double regJ)
 		for(a = 0; a < q; a++) {
 			averrh += fabs(fm_s[i*q +a] - fm[i*q +a]);
 			merrh =  max(merrh, fabs(fm_s[i*q+a] - fm[i*q+a]));
-			h[i*q+a] += params.lrate * adaptive_learn(i, a, 0, 0, 'h', fm[i*q+a] - fm_s[i*q+a]);
+			h[i*q+a] += params.lrateh * adaptive_learn(i, a, 0, 0, 'h', fm[i*q+a] - fm_s[i*q+a]);
 			for(j = i+1; j < L; j++) {
 				for(b = 0; b <q; b++) {
 					averrJ += fabs(sm_s[i*q +a][j*q +b] - sm[i*q +a][j*q +b]);
 					merrJ =  max(merrJ, fabs(sm_s[i*q+a][j*q+b] - sm[i*q+a][j*q+b]));
-					J[i*q + a][j*q + b] += params.lrate * adaptive_learn(i, a, j, b, 'J', sm[i*q+a][j*q+b] - sm_s[i*q+a][j*q+b])
+					J[i*q + a][j*q + b] += params.lrateJ * adaptive_learn(i, a, j, b, 'J', sm[i*q+a][j*q+b] - sm_s[i*q+a][j*q+b])
 							- regJ * ( (J[i*q +a][j*q + b] > 0)  - (J[i*q +a][j*q+b] < 0) ) ;
 					J[j*q + b][i*q + a] = J[i*q + a][j*q + b];
 				}
