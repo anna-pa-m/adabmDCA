@@ -91,6 +91,7 @@ int * chain_fin_2;
 int * intra_chain;
 int * half_chain;
 int idx_chain_1, idx_chain_2;
+int * curr_state;
 
 
 int q = 21, L, M;
@@ -117,9 +118,9 @@ int print_model(char * filename);
 int print_msa(char * filename);
 int print_statistics(char * file_sm, char *file_fm, char *file_tm);
 int sample();
-int * mc_chain(int *curr_state, bool test_chain_sampl, bool test_chain_half, int test_chain_eq);
-int gibbs_step(int *curr_state);
-int metropolis_step(int * curr_state);
+int mc_chain(bool test_chain_sampl, bool test_chain_half, int test_chain_eq);
+int gibbs_step();
+int metropolis_step();
 void permute(int * vector, int s);
 double energy(int *seq);
 int update_parameters(double regJ);
@@ -678,7 +679,6 @@ int load_third_order_indices()
 
 }
 
-
 int compute_third_order_correlations() 
 {
 	int ind, i, j, k, a, b, c;
@@ -694,6 +694,7 @@ int compute_third_order_correlations()
 	}
 	return 0;
 }
+
 int compute_w()
 {
 	if(params.file_w) {
@@ -807,6 +808,7 @@ int alloc_structures()
 	chain_fin_1 = (int *)calloc(L, sizeof(int));
 	chain_fin_2 = (int *)calloc(L, sizeof(int));
 	intra_chain = (int *)calloc(L, sizeof(int));
+	curr_state = (int *)calloc(L, sizeof(int));
 	return 0;
 }
 
@@ -1271,11 +1273,11 @@ int sample()
 //#pragma omp parallel for private(i,s)
 	for(t = 0; t < params.num_threads; t++) {
 		for(s = 0; s < params.Nmc_starts; s++) {
-			int x[L];
-			int *aux;
+			//int x[L];
+			//int *aux;
 			test_chain_eq = 0;
 			for(i = 0; i < L; i++)
-				x[i] = (int)rand() % q;
+				curr_state[i] = (int)rand() % q;
 			if(s == idx_chain_1) {
 				test_chain_eq = 1;
 				test_chain_sampl = true;
@@ -1286,14 +1288,14 @@ int sample()
 			}
 			if(s == idx_chain_2)
 				test_chain_eq = 2;
-			aux = mc_chain(x, test_chain_sampl, test_chain_half, test_chain_eq);
+			mc_chain(test_chain_sampl, test_chain_half, test_chain_eq);
 			if(s == idx_chain_1) {
 				for(i = 0; i < L; i++)
-					chain_fin_1[i] = aux[i];
+					chain_fin_1[i] = curr_state[i];
 			}
 			if(s == idx_chain_2) {
 				for(i = 0; i < L; i++)
-					chain_fin_2[i] = aux[i];
+					chain_fin_2[i] = curr_state[i];
 			}
 		}
 	}
@@ -1330,7 +1332,7 @@ int equilibration_test()
 	return 0;
 }
 
-int metropolis_step(int * curr_state) 
+int metropolis_step() 
 {
 	int i, a, j;
 	double deltaE, p;
@@ -1344,12 +1346,14 @@ int metropolis_step(int * curr_state)
 			  + J[i*q + curr_state[i]][j*q + curr_state[j]];
 	}
 	p = rand01();
-	if (exp(-deltaE) > p)
+	if (exp(-deltaE) > p) {
+		//printf("i: %d, %d -> %d\n", i, curr_state[i], a);
 		curr_state[i] = a;
+	}
 	return 0;
 }
 
-int gibbs_step(int * curr_state)
+int gibbs_step()
 {
 	int a, i, j;
 	double H[q], p[q+1];
@@ -1384,7 +1388,7 @@ int gibbs_step(int * curr_state)
 	return 0;
 }
 
-int * mc_chain(int *curr_state, bool test_chain_sampl, bool test_chain_half, int test_chain_eq)
+int mc_chain(bool test_chain_sampl, bool test_chain_half, int test_chain_eq)
 {
 	int t = 0,n,i;
 	FILE * fp = 0, * fe = 0;
@@ -1394,6 +1398,7 @@ int * mc_chain(int *curr_state, bool test_chain_sampl, bool test_chain_half, int
 		fe = fopen(params.file_en, "a");
 	if(params.Gibbs)
 		gibbs_en = energy(curr_state);
+
 	while(t <= params.Teq) {
 		t++;
 		if(test_chain_half && t == params.Teq/2)
@@ -1441,7 +1446,7 @@ int * mc_chain(int *curr_state, bool test_chain_sampl, bool test_chain_half, int
 		fclose(fp);
 	if(print_en)
 		fclose(fe);
-	return curr_state;
+	return 0;
 
 }
 
@@ -1477,7 +1482,7 @@ int update_parameters(double regJ)
 		for(a = 0; a < q; a++) {
 			averrh += fabs(fm_s[i*q +a] - fm[i*q +a]);
 			merrh =  max(merrh, fabs(fm_s[i*q+a] - fm[i*q+a]));
-			h[i*q+a] += params.lrate * 0.1 * adaptive_learn(i, a, 0, 0, 'h', fm[i*q+a] - fm_s[i*q+a]);
+			h[i*q+a] += params.lrate * adaptive_learn(i, a, 0, 0, 'h', fm[i*q+a] - fm_s[i*q+a]);
 			for(j = i+1; j < L; j++) {
 				for(b = 0; b <q; b++) {
 					averrJ += fabs(sm_s[i*q +a][j*q +b] - sm[i*q +a][j*q +b]);
