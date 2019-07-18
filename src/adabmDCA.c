@@ -1112,7 +1112,7 @@ int initialize_parameters()
 	} else {
 		switch(params.init) {
 			case 'R':
-				fprintf(stdout, "Random initialization, 1e-3 x rand(-1,1)...");
+				fprintf(stdout, "Zero-parameters initialization...");
 				for(i = 0; i < L; i++) {
 					for(a = 0; a < q; a++) {
 						//h[i*q + a] = 1e-3 * randrange(-1,1);
