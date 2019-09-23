@@ -538,7 +538,8 @@ int convert_char_nbase(char a)
 			break;
 		default:
 			fprintf(stderr, "%c not recognized\n", a);
-			return(EXIT_FAILURE);
+			i = 0;
+			break;
 	}
 	return i;
 
