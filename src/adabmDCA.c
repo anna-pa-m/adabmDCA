@@ -992,7 +992,7 @@ int compute_frobenius_norms(char *filename, char *parfile)
 	FILE *fp, *fpp;
 	fp = fopen(filename, "w");
 	fpp = fopen(parfile, "w");
-	double mean_all;
+	double mean_all,mean_h;
 	for(i = 0; i < L; i++) {
 		for(j = 0; j < L; j++) {
 			mean_all = 0.0;
@@ -1015,18 +1015,39 @@ int compute_frobenius_norms(char *filename, char *parfile)
 			for(a =0; a < q;a++) {
 				for(b = 0; b <q;b++){
 					Jzs[i*q+a][j*q+b] = J[i*q+a][j*q+b] - mean_ai[b] - mean_aj[a] + mean_all;
+					Jzs[j*q+b][i*q+a] = Jzs[i*q+a][j*q+b];
 				}
 			}
 		}
-	}
-	for(i = 0; i < L; i++) {
-		mean_all = 0;
-		for(a = 0; a < q; a ++)
-			mean_all += h[i*q+a];
-		mean_all /= q;
+		mean_h = 0.0;
 		for(a = 0; a < q; a++)
-			hzs[i*q+a] = h[i*q+a] - mean_all;
+			mean_h += h[i*q+a];
+		mean_h /= q;
+		for(a = 0; a < q; a++)
+			hzs[i*q+a] = h[i*q+a] - mean_h;
+		for(j = 0; j < L; j++) {
+			mean_all = 0.0;
+			for(a = 0; a < q; a++){
+				mean_aj[a] = 0;
+				for(b = 0; b < q; b++){
+					mean_aj[a] += J[i*q+a][j*q+b];
+					mean_all += J[i*q+a][j*q+b];
+				}
+				mean_aj[a] = mean_aj[a] / q;
+			}
+			mean_all = mean_all / (q*q);
+			for(a = 0; a < q; a++)
+				hzs[i*q+a] += mean_aj[a] - mean_all;
+		}
 	}
+//	for(i = 0; i < L; i++) {
+//		mean_all = 0;
+//		for(a = 0; a < q; a ++)
+//			mean_all += h[i*q+a];
+//		mean_all /= q;
+//		for(a = 0; a < q; a++)
+//			hzs[i*q+a] = h[i*q+a] - mean_all;
+//	}
 	for(i = 0; i < L; i++) {
 		for(j = i+1; j < L; j++) {
 			for(a = 0; a < q; a++) {
