@@ -265,7 +265,7 @@ int main(int argc, char ** argv)
 				fprintf(stdout, "Here's the list of the instructions\n");
 				fprintf(stdout, "-f : MSA alignment in FASTA format\n");
 				fprintf(stdout, "-d : Pseudo-count, default: 1/M \n");
-				fprintf(stdout, "-b : Alphabet. a : amino-acids. n : nucleic acids. i : present/absent. Default: a\n");
+				fprintf(stdout, "-b : Alphabet. \n  \ta : amino-acids. \n \tn : nucleic acids. \n \ti : present/absent. \n \te : epigenetic data. \n \tDefault: a\n");
 				fprintf(stdout, "-w : (optional file) weights file\n");
 				fprintf(stdout, "-S : (optional file) file name in which print configurations at convergence\n");
 				fprintf(stdout, "-E : (optional file) file name in which print energy's configurations at convergence\n");
@@ -297,7 +297,7 @@ int main(int argc, char ** argv)
 				fprintf(stdout, "-m : Print Frobenius norms and parameters every x iterations, default: %d\n", params.nprintfile);
 				fprintf(stdout, "-u : Learning rate for couplings, default: %.e\n", params.lrateJ);
 				fprintf(stdout, "-v : Learning rate for fields, default: %.e\n", params.lrateh);
-				fprintf(stdout, "-a : Learning strategy.\n     0: standard gradient descent\n     1: adagrad\n     2. adadelta\n     3. search then converge\n     4. adam\n     Default: %d\n", params.learn_strat);
+				fprintf(stdout, "-a : Learning strategy.\n \t0: standard gradient descent\n \t1: adagrad\n \t2. adadelta\n \t3. search then converge\n \t4. adam\n \tDefault: %d\n", params.learn_strat);
 				
 				return(EXIT_FAILURE);
 			default:
@@ -316,6 +316,9 @@ int main(int argc, char ** argv)
 	} else if(!strcmp(params.ctype, "i")) {
 		fprintf(stdout, "Using alphabet: AP (0,1) \n");
 		q = 2;
+	} else if(!strcmp(params.ctype, "e")) {
+		fprintf(stdout, "Using alphabet: -AF5TtGEZhBbeRrq \n");
+		q = 16;
 	} else {
 		fprintf(stderr, "Use 'a' for amino-acids or 'n' for nitrogenous bases\n");
 		return EXIT_FAILURE;
@@ -545,6 +548,68 @@ int convert_char_nbase(char a)
 
 }
 
+
+int convert_char_epi(char a)
+{
+	int i;
+	switch(a) {
+		case '-':
+			i = 0;
+			break;
+		case 'A':
+			i = 1;
+			break;
+		case 'F':
+			i = 2;
+			break;
+		case '5':
+			i = 3;
+			break;
+		case 'T':
+			i = 4;
+			break;
+		case 't':
+			i = 5;
+			break;
+		case 'G':
+			i = 6;
+			break;
+		case 'E':
+			i = 7;
+			break;
+		case 'Z':
+			i = 8;
+			break;
+		case 'h':
+			i = 9;
+			break;
+		case 'B':
+			i = 10;
+			break;
+		case 'b':
+			i = 11;
+			break;
+		case 'e':
+			i = 12;
+			break;
+		case 'R':
+			i = 13;
+			break;
+		case 'r':
+			i = 14;
+			break;
+		case 'q':
+			i = 15;
+			break;
+		default:
+			fprintf(stderr, "%c not recognized, assuming '-'\n", a);
+			i = 0;
+			break;
+			//return(EXIT_FAILURE);
+	}
+	return i;
+}
+
 int convert_char_ising(char a)
 {
 	int i;
@@ -604,6 +669,8 @@ int read_msa()
 				auxseq[l-1] = convert_char_nbase(ch);
 			else if(!strcmp(params.ctype, "i"))
 				auxseq[l-1] = convert_char_ising(ch);
+			else if(!strcmp(params.ctype, "e"))
+				auxseq[l-1] = convert_char_epi(ch);
 			//auxseq[l-1] = (!strcmp(params.ctype, "a")) ? convert_char_amino(ch) : convert_char_nbase(ch);
 		} else if (ch == '\n' && newseq == 0 && readseq == 1) {
 			if (L == 0) {
