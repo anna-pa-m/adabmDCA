@@ -405,7 +405,7 @@ int main(int argc, char ** argv)
 		if(model_sp >= params.sparsity && params.sparsity > 0 && check_convergence())
 			conv = true;
 		if(iter % params.nprint == 0) {
-			fprintf(stdout, "it: %i N: %i Teq: %i Twait: %i merr_fm: %.1e merr_sm: %.1e averr_fm: %.1e averr_sm: %.1e cov_err: %.1e corr: %.2f sp: %.1e max_sdkl: %.1f\n", iter, params.Nmc_config * params.Nmc_starts, params.Teq, params.Twait, merrh, merrJ, averrh, averrJ, errnorm, pearson(), model_sp, maxsdkl);
+			fprintf(stdout, "it: %i N: %i Teq: %i Twait: %i merr_fm: %.1e merr_sm: %.1e averr_fm: %.1e averr_sm: %.1e cov_err: %.1e corr: %.2f sp: %.1e max_sdkl: %.1e\n", iter, params.Nmc_config * params.Nmc_starts, params.Teq, params.Twait, merrh, merrJ, averrh, averrJ, errnorm, pearson(), model_sp, maxsdkl);
 			fflush(stdout);
 		}
 		if(iter % params.nprintfile == 0) {
@@ -1844,7 +1844,10 @@ int decimate_compwise(int c)
 		n = (L*(L-1)*q*q)/2;
 	}
 
+
 	for(k = 0; k < n; k++) {
+		tmp_idx[k] = k;
+		sorted_struct[k] = 0.0;
 		i = idx[k][0];
 		a = idx[k][2];
 		j = idx[k][1];
@@ -1854,9 +1857,8 @@ int decimate_compwise(int c)
 			sorted_struct[k] = J[i*q+a][j*q+b] * sm_s[i*q+a][j*q+b]
 					- (J[i*q+a][j*q+b] * exp(-J[i*q+a][j*q+b]) * sm_s[i*q+a][j*q+b]) / (exp(-J[i*q+a][j*q+b]) *sm_s[i*q+a][j*q+b] + 1 - sm_s[i*q+a][j*q+b]);
 			maxsdkl = max(maxsdkl, sorted_struct[k]);
-			fprintf(fileout, "%i %i %i %i %f %f\n", i, j, a, b, sorted_struct[k], J[i*q+a][j*q+b]);
+			fprintf(fileout, "%i %i %i %i %.2e %f\n", i, j, a, b, sorted_struct[k], J[i*q+a][j*q+b]);
 			//sorted_struct[k] += 1e-4 * rand01();
-			//fprintf(stderr, "sDKL %f\n", sorted_struct[k]);
 		} else {
 			double f = rand01();
 			sorted_struct[k] =  n * f; // to be optimized: elements should be removed instead of putting large numbers
@@ -1865,13 +1867,8 @@ int decimate_compwise(int c)
 	}
 	fflush(fileout);
 	fclose(fileout);
-	fprintf(stdout, "Non-zeros parameters %d / %d \n",m,neff);
-	for(k = 0; k < n; k++) {
-		tmp_idx[k] = k;
-	}
+	fprintf(stdout, "Non-zeros parameters %d / %d \n",m, neff);
 	quicksort(sorted_struct, tmp_idx, 0, n-1);
-	//for(k = 0; k < n; k++)
-	//	fprintf(stderr, "%f\n", sorted_struct[k]);
 	for(k = 0; k < c; k++) {
 		index = tmp_idx[k];
 		i = idx[index][0];
@@ -1884,6 +1881,8 @@ int decimate_compwise(int c)
 	       	dec[i*q+a][j*q + b] = 0.0;
 		dec[j*q+b][i*q + a] = 0.0;
 	}
+	index = tmp_idx[c];
+	fprintf(stdout, "Smallest sDKL associated with the first kept coupling is %1.e (for %i %i %i %i)\n", sorted_struct[index], idx[index][0], idx[index][1], idx[index][2], idx[index][3]);
 	model_sp += 1.0*c/n;
 	return 0;
 }
