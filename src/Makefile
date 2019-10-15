@@ -1,4 +1,4 @@
-CFLAGS=-Wall -O3 -g
+CFLAGS=-Wall -O3 -g -fopenmp
 
 
 adabmDCA: adabmDCA.c

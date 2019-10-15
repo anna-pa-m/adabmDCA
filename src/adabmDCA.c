@@ -7,23 +7,24 @@
 #include <string.h>
 #include <getopt.h>
 #include <stdbool.h>
-//#include <omp.h>
+#include <omp.h>
 
 
 // files and parameters
 struct Params {
 
 	char * file_msa, * file_w , * file_params, init, * label, * ctype, * file_3points, *file_cc, *file_samples, *file_en;
-	bool Metropolis, Gibbs, dgap, gapnn, empdec, phmm;
+	bool Metropolis, Gibbs, dgap, gapnn, phmm, blockwise, compwise;
 	double sparsity, rho, w_th,  regJ, lrateJ, lrateh, conv, pseudocount;
-	int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, num_threads, Nmc_config, Nmc_config_max, Tcheck, Twait_max, Twait, maxiter;
+	int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, threads, Nmc_config, Nmc_config_max, Tcheck, Twait_max, Twait, maxiter;
 } params = {
 	.phmm = false,
 	.ctype = 0,
 	.pseudocount = 0,
 	.gapnn = false,
 	.dgap = false,
-	.empdec = false,
+	.compwise = false,
+	.blockwise = false,
 	.seed = 0,
 	.label = 0,
 	.init = 'R',
@@ -40,7 +41,7 @@ struct Params {
 	.Nmc_starts = 1000,
 	.Nmc_config = 50,
 	.w_th = 0.2,
-	.num_threads = 1,
+	.threads = 1,
 	.Twait = 2000,
 	.Teq = 5000,
 	.maxiter = 2000,
@@ -60,7 +61,7 @@ struct Params {
 double * w;
 int ** idx;
 int * tmp_idx;
-double * sortedJ;
+double * sorted_struct;
 int ** msa;
 double * fm;
 double * h;
@@ -72,6 +73,8 @@ double ** J;
 double ** Gj;
 double * fm_s;
 double ** sm_s;
+double ** fm_s_t;
+double *** sm_s_t;
 double * tm_s;
 double ** mtj;
 double ** vtj;
@@ -92,10 +95,10 @@ int * chain_fin_2;
 int * intra_chain;
 int * half_chain;
 int idx_chain_1, idx_chain_2;
-int * curr_state;
 
 
 int q = 21, L, M;
+double maxsdkl;
 double gibbs_en = 0.0, averrh, averrJ, merrh, merrJ, errnorm, model_sp;
 int iter = 0;
 bool compute_tm = false;
@@ -111,6 +114,7 @@ int read_msa();
 int preprocess_msa();
 int compute_w();
 int alloc_structures();
+int update_par_stat();
 int compute_empirical_statistics();
 int compute_third_order_moments();
 int compute_statistics();
@@ -119,9 +123,9 @@ int print_model(char * filename);
 int print_msa(char * filename);
 int print_statistics(char * file_sm, char *file_fm, char *file_tm);
 int sample();
-int mc_chain(bool test_chain_sampl, bool test_chain_half, int test_chain_eq);
-int gibbs_step();
-int metropolis_step();
+int mc_chain(int * curr_state, bool test_chain_sampl, bool test_chain_half, int test_chain_eq, int t);
+int gibbs_step(int * curr_state);
+int metropolis_step(int * curr_state);
 void permute(int * vector, int s);
 double energy(int *seq);
 int update_parameters(double regJ);
@@ -131,11 +135,13 @@ double adaptive_learn(int i, int a, int j, int b, char type, double grad);
 int compute_frobenius_norms(char *filename, char *parfile);
 double compute_gibbs_z(int i, int *x);
 int init_statistics();
-int update_statistics(int *x);
+int update_statistics(int *x, int t );
 int update_tm_statistics(int *x);
 bool check_convergence();
 double pearson();
 int decimate(int c);
+int decimate_compwise(int c);
+int remove_gauge_freedom();
 int quicksort(double *x, int *tmp_idx, int first, int last);
 int load_third_order_indices();
 int compute_third_order_correlations();
@@ -152,7 +158,7 @@ int main(int argc, char ** argv)
 	char third[1000];
 	char par[1000];
 	char sc;
-	while ((c = getopt(argc, argv, "y:b:f:w:l:u:v:s:n:m:p:j:t:i:a:c:z:g:e:k:x:S:d:T:C:MGIRhDNE:HPo:")) != -1) {
+	while ((c = getopt(argc, argv, "y:b:f:w:l:u:v:s:n:m:p:j:t:i:a:c:z:g:e:k:x:S:d:T:C:MGIRhDNE:Ho:BW")) != -1) {
 		switch (c) {
 			case 'o':
 				params.Tcheck = atoi(optarg);
@@ -169,14 +175,17 @@ int main(int argc, char ** argv)
 			case 'C':
 				params.file_cc = optarg;
 				break;
+			case 'B':
+				params.blockwise = true;
+				break;
+			case 'W':
+				params.compwise = true;
+				break;
 			case 'S':
 				params.file_samples = optarg;
 				break;
 			case 'E':
 				params.file_en = optarg;
-				break;
-			case 'P':
-				params.empdec = true;
 				break;
 			case 'H':
 				params.phmm = true;
@@ -204,6 +213,10 @@ int main(int argc, char ** argv)
 				break;
 			case 's':
 				params.Nmc_starts = atoi(optarg);
+				if(params.Nmc_starts == 1) {
+					fprintf(stderr, "You need at least 2 MC chains to check equilibration\n");
+					params.Nmc_starts = 2;
+				}
 				break;
 			case 'n':
 				params.Nmc_config = atoi(optarg);
@@ -212,7 +225,7 @@ int main(int argc, char ** argv)
 				params.file_params = optarg;
 				break;
 			case 'j':
-				params.num_threads = atoi(optarg);
+				params.threads = atoi(optarg);
 				break;
 			case 'e':
 				params.Teq = atoi(optarg);
@@ -272,9 +285,11 @@ int main(int argc, char ** argv)
 				fprintf(stdout, "-T : (optional file) (i j k a b c) indices for third order correlations\n");
 				fprintf(stdout, "-C : (optional file) (i j a b corr) given graph for correlations compressed\n");
 				fprintf(stdout, "-l : Threshold for computing weigts, default: %.1f\n", params.w_th);
-				fprintf(stdout, "-g : Regularization (J parameters), default :%.3e\n", params.regJ);
+				fprintf(stdout, "-g : L1 Regularization (J parameters), default :%.3e\n", params.regJ);
 				fprintf(stdout, "-k : Label used in output files\n");
-				fprintf(stdout, "-x : Required sparsity. If this value is larger than zero, l1 par = 0 and decimation is applied\n");
+				fprintf(stdout, "-x : Required sparsity. (old implementation) If this value is larger than zero, the algorithm sequentially prunes the J(i,j,a,b)\n");
+				fprintf(stdout, "-B : (flag) A block-wise decimation is applied to the couplings using sDKL as a criterion. Default: false\n");
+				fprintf(stdout, "-W : (flag) A component-wise decimation is applied to the couplings using sDKL as a criterion. Default: false\n");
 				fprintf(stdout, "-R : (flag) Random initialization of couplings and field in the range [-1e-3, 1e-3]\n");
 				fprintf(stdout, "-I : (flag) Indipendent model initialization\n");
 				fprintf(stdout, "-G : (flag) Using Gibbs sampling\n");
@@ -289,7 +304,7 @@ int main(int argc, char ** argv)
 				fprintf(stdout, "-n : Number of MC configurations per chain, default: %d\n", params.Nmc_config);
 				fprintf(stdout, "-p : (optional file) Initial parameters J, h, default: random [-1e-3, 1e-3]\n");
 				fprintf(stdout, "-c : Convergence tolerance, default: %.3e\n", params.conv);
-				fprintf(stdout, "-j : Number of threads, default: %d\n", params.num_threads);
+				fprintf(stdout, "-j : Number of threads, default: %d\n", params.threads);
 				fprintf(stdout, "-e : MC Equilibration time, default: %d\n", params.Teq);
 				fprintf(stdout, "-t : Sampling time of MC algorithm, default: %d\n", params.Twait);
 				fprintf(stdout, "-i : Maximum number of iterations, default: %d\n", params.maxiter);
@@ -298,7 +313,6 @@ int main(int argc, char ** argv)
 				fprintf(stdout, "-u : Learning rate for couplings, default: %.e\n", params.lrateJ);
 				fprintf(stdout, "-v : Learning rate for fields, default: %.e\n", params.lrateh);
 				fprintf(stdout, "-a : Learning strategy.\n \t0: standard gradient descent\n \t1: adagrad\n \t2. adadelta\n \t3. search then converge\n \t4. adam\n \tDefault: %d\n", params.learn_strat);
-				
 				return(EXIT_FAILURE);
 			default:
 				return(EXIT_FAILURE);
@@ -323,7 +337,6 @@ int main(int argc, char ** argv)
 		fprintf(stderr, "Use 'a' for amino-acids or 'n' for nitrogenous bases\n");
 		return EXIT_FAILURE;
 	}
-
 	read_msa();
 	if(params.Metropolis)
 		fprintf(stdout, "Performing Metropolis-Hastings MC: sample every %d configurations (eq. time is %d), using %d seeds. \nTot number of points %d\n", params.Twait, params.Teq, params.Nmc_starts, params.Nmc_starts * params.Nmc_config);
@@ -350,12 +363,13 @@ int main(int argc, char ** argv)
 	}
 	if(params.sparsity > 0.0) {
 		params.regJ = 0;
-		fprintf(stdout, "Sparsity %.3f, using decimation\n", params.sparsity);
-	} else
+		fprintf(stdout, "Sparsity %.3f, using direct decimation on couplings\n", params.sparsity);
+	}
+	if(params.regJ > 0)
 		fprintf(stdout, "L1 regularization on couplings: lambda %.1e\n", params.regJ);
 	if(params.pseudocount)
 		fprintf(stdout, "Using pseudo-count: %1.e\n", params.pseudocount);
-	//omp_set_num_threads(params.num_threads);
+	omp_set_num_threads(params.threads);
 	compute_w();
 	alloc_structures();
 	compute_empirical_statistics();
@@ -371,6 +385,8 @@ int main(int argc, char ** argv)
 	} else {
 	        n = (L*(L-1)*q*q)/2;
 	}
+	if(params.blockwise || params.compwise)
+		remove_gauge_freedom();
 	while(!conv && iter < params.maxiter) {
 		init_statistics();
 		sample();
@@ -380,13 +396,16 @@ int main(int argc, char ** argv)
 		if(model_sp < params.sparsity && iter % 10 == 0) {
 			fprintf(stdout, "Decimating..");
 			decimate(ceil((n*10)/(params.maxiter*0.5)));
+		} else if(params.compwise && iter % 10 == 0) {
+			fprintf(stdout,"Decimating..");
+			decimate_compwise(ceil((n*2)/(params.maxiter*0.9)));
 		}
 		if(check_convergence() && params.sparsity == 0)
 			conv = true;
 		if(model_sp >= params.sparsity && params.sparsity > 0 && check_convergence())
 			conv = true;
 		if(iter % params.nprint == 0) {
-			fprintf(stdout, "it: %i N: %i Teq: %i Twait: %i merr_fm: %.3e merr_sm: %.3e averr_fm: %.3e averr_sm: %.3e cov_err: %.3e corr: %.2f sp: %.2e\n", iter, params.Nmc_config * params.Nmc_starts, params.Teq, params.Twait, merrh, merrJ, averrh, averrJ, errnorm, pearson(), model_sp);
+			fprintf(stdout, "it: %i N: %i Teq: %i Twait: %i merr_fm: %.1e merr_sm: %.1e averr_fm: %.1e averr_sm: %.1e cov_err: %.1e corr: %.2f sp: %.1e max_sdkl: %.1f\n", iter, params.Nmc_config * params.Nmc_starts, params.Teq, params.Twait, merrh, merrJ, averrh, averrJ, errnorm, pearson(), model_sp, maxsdkl);
 			fflush(stdout);
 		}
 		if(iter % params.nprintfile == 0) {
@@ -403,6 +422,8 @@ int main(int argc, char ** argv)
 		}
 		iter++;
 	}
+	params.threads = 1;
+	omp_set_num_threads(params.threads);
 	load_third_order_indices();
 	if(params.file_samples)
 		print_samples = true;
@@ -826,11 +847,19 @@ int compute_w()
 
 int alloc_structures()
 {
-	int i;
+	int i, t;
 	fm = (double *)calloc(L*q, sizeof(double));
 	h = (double *)calloc(L*q, sizeof(double));
 	fm_s = (double *)calloc(L*q, sizeof(double));
 	sm = (double **)calloc(L*q, sizeof(double *));
+	if(params.threads > 1) {
+		fm_s_t = (double **)calloc(params.threads, sizeof(double *));
+		sm_s_t = (double ***)calloc(params.threads, sizeof(double **));
+		for(t = 0; t < params.threads; t++) {
+			fm_s_t[t] = (double *)calloc(L*q, sizeof(double));
+			sm_s_t[t] = (double **)calloc(L*q, sizeof(double *));
+		}
+	}
 	cov = (double **)calloc(L*q, sizeof(double *));
 	J = (double **)calloc(L*q, sizeof(double *));
 	dec = (double **)calloc(L*q, sizeof(double *));
@@ -843,6 +872,10 @@ int alloc_structures()
 		cov[i] = (double *)calloc(L*q, sizeof(double));
 		sm[i] = (double *)calloc(L*q, sizeof(double));
 		sm_s[i] = (double *)calloc(L*q, sizeof(double));
+		if(params.threads > 1) {
+			for(t = 0; t < params.threads; t++)
+				sm_s_t[t][i] = (double *)calloc(L*q, sizeof(double));
+		}
 		J[i] = (double *)calloc(L*q, sizeof(double));
 		dec[i] = (double *)calloc(L*q, sizeof(double));
 	}
@@ -860,10 +893,10 @@ int alloc_structures()
 			mtj[i] = (double *)calloc(L*q, sizeof(double));
 		}
 	}
-	if(params.sparsity > 0) {
+	if(params.sparsity > 0 || params.compwise || params.blockwise) {
 		int n = L*(L-1)*q*q/2;
 		idx = (int **)calloc(n, sizeof(int *));
-		sortedJ = (double *)calloc(n, sizeof(double));
+		sorted_struct = (double *)calloc(n, sizeof(double));
 		tmp_idx = (int *)calloc(n, sizeof(int));
 		for(i = 0; i < n;i++)
 			idx[i] = (int *)calloc(4, sizeof(int));
@@ -882,7 +915,6 @@ int alloc_structures()
 	chain_fin_1 = (int *)calloc(L, sizeof(int));
 	chain_fin_2 = (int *)calloc(L, sizeof(int));
 	intra_chain = (int *)calloc(L, sizeof(int));
-	curr_state = (int *)calloc(L, sizeof(int));
 	return 0;
 }
 
@@ -947,21 +979,50 @@ int init_statistics()
 			}
 		}
 	}
+	if(params.threads > 1) {
+		int t;
+		for(t = 0; t < params.threads; t++) {
+			for(i = 0; i < L; i++) {
+				for(a = 0; a < q; a++) {
+					fm_s_t[t][i*q + a] = 0;
+					sm_s_t[t][i*q + a][i*q + a] = 0;
+					for(j = i+1; j < L; j++) {
+						for(b = 0; b < q; b++) {
+							sm_s_t[t][i*q + a][j*q + b] = 0;
+							sm_s_t[t][j*q + a][i*q + b] = 0;
+						}
+					}
+				}
+			}
+		}
+	}
 
 	return 0;
 
 }
 
-int update_statistics(int *x)
+int update_statistics(int *x, int t)
 {
 	int i, j;
 	int Ns = params.Nmc_starts * params.Nmc_config;
-	for(i = 0; i < L; i++) {
-		fm_s[i*q + x[i]] += 1.0/Ns;
-		sm_s[i*q + x[i]][i*q + x[i]] += 1.0/Ns;
-		for(j = i+1; j < L; j++) {
-			sm_s[i*q + x[i]][j*q + x[j]] += 1.0/Ns;
-			sm_s[j*q + x[j]][i*q + x[i]] += 1.0/Ns;
+	if(params.threads == 1)
+	{
+		for(i = 0; i < L; i++) {
+			fm_s[i*q + x[i]] += 1.0/Ns;
+			sm_s[i*q + x[i]][i*q + x[i]] += 1.0/Ns;
+			for(j = i+1; j < L; j++) {
+				sm_s[i*q + x[i]][j*q + x[j]] += 1.0/Ns;
+				sm_s[j*q + x[j]][i*q + x[i]] += 1.0/Ns;
+			}
+		}
+	} else {
+		for(i = 0; i < L; i++) {
+			fm_s_t[t][i*q + x[i]] += 1.0/Ns;
+			sm_s_t[t][i*q + x[i]][i*q + x[i]] += 1.0/Ns;
+			for(j = i+1; j < L; j++) {
+				sm_s_t[t][i*q + x[i]][j*q + x[j]] += 1.0/Ns;
+				sm_s_t[t][j*q + x[j]][i*q + x[i]] += 1.0/Ns;
+			}
 		}
 	}
 	return 0;
@@ -1244,59 +1305,54 @@ int initialize_parameters()
 		fprintf(stdout, "Using Hmmer-like model\n");
 	if(!params.file_cc) {
 		for(i = 0; i < L; i++) {
-			for(j = i; j < L; j++) {
+			for(j = 0; j < L; j++) {
 				for(a = 0; a < q; a++) {
-					for(b = 0; b < q; b ++) {
+					for(b = 0; b < q; b++) {
 						if(i == j) {
 							dec[i*q+a][j*q+b] = 0.0;
 							J[i*q+a][j*q+b] = 0.0;
-						}
-						if(params.dgap && (a == 0 || b == 0)) {
+						} else if(params.dgap && (a == 0 || b == 0)) {
 							dec[i*q + a][j*q + b] = 0.0;
-							dec[j*q + b][i*q + a] = 0.0;
 							J[i*q + a][j*q + b] = 0.0;
-							J[j*q + b][i*q + a] = 0.0;
 						} else if(params.gapnn) {
-							if(abs(i -j) > 1) {
+							if(abs(i - j) > 1) {
 								if(a == 0 || b == 0) {
 									dec[i*q + a][j*q + b] = 0.0;
-									dec[j*q + b][i*q + a] = 0.0;
 									J[i*q + a][j*q + b] = 0.0;
-									J[j*q + b][i*q + a] = 0.0;
+//									printf("Dec: %d %d %d %d\n",i,j,a,b);
 								} else {
 									dec[i*q+a][j*q+b] = 1.0;
-									dec[j*q+b][i*q+a] = 1.0;
+//									printf("Non dec: %d %d %d %d \n", i,j,a,b);
 								}
-
 							} else {
 								if((a == 0 && b > 0) || (b == 0 && a > 0)) {
+//									printf("Dec: %d %d %d %d\n",i,j,a,b);
 									dec[i*q + a][j*q + b] = 0.0;
-									dec[j*q + b][i*q + a] = 0.0;
-									J[i*q + a][j*q + b] =0.0;
-									J[j*q + b][i*q + a] =0.0;
-								}else {
+									J[i*q + a][j*q + b] = 0.0;
+								} else {
 									dec[i*q+a][j*q+b] = 1.0;
-									dec[j*a+b][i*q+a] = 1.0;
+//									printf("Non dec: %d %d %d %d\n",i,j,a,b);
 								}
 							}
+//							printf("Inside %d %d %d %d %f %f\n", i,j, a,b, J[0*q+0][3*q+0], dec[0*q+0][3*q+0]);
+//							fflush(stdout);
+//							fflush(stderr);
 						} else if(params.phmm) {
 							if(a == 0 && b == 0 && abs(i-j) == 1) {
 								dec[i*q+a][j*q+b] = 1.0;
-								dec[j*q+b][i*q+a] = 1.0;
 							} else {
 								dec[i*q + a][j*q + b] = 0.0;
-								dec[j*q + b][i*q + a] = 0.0;
 								J[i*q + a][j*q + b] = 0.0;
-								J[j*q + b][i*q + a] = 0.0;
 							}
 						} else {
-							dec[i*q + a][j*q + b] = 1.0;
-							dec[j*q + b][i*q + a] = 1.0;
+//							printf("Entro qua, gapnn %d\n", params.gapnn);
+							dec[i*q + a][j*q + b] = 1.0;	
 						}
 					}
 				}
 			}
 		}
+//		printf("After init: %f %f \n", J[0*q+0][3*q+0], dec[0*q+0][3*q+0]);
 	} else {
 		fprintf(stdout, "Reading graph from file for correlation-compressed...");
 		FILE *filep;
@@ -1334,7 +1390,7 @@ int initialize_parameters()
 		}
 		fprintf(stdout, "done\nNumber of links %d\n", links);
 	}
-	if(params.sparsity > 0) {
+	if(params.sparsity > 0 || params.compwise || params.blockwise) {
 		int k = 0;
 		for(i = 0; i < L; i++) {
 			for(j = i+1; j < L; j++) {
@@ -1344,7 +1400,7 @@ int initialize_parameters()
 						idx[k][1] = j;
 						idx[k][2] = a;
 						idx[k][3] = b;
-						sortedJ[k] = J[i*q+a][j*q+b];
+						sorted_struct[k] = J[i*q+a][j*q+b];
 						k += 1;
 					}
 				}
@@ -1358,41 +1414,80 @@ int initialize_parameters()
 
 int sample()
 {
-	int t, i, s;
+	int Nmin[params.threads], Nmax[params.threads];
+	if(params.threads == 1) {
+		Nmin[0] = 0;
+		Nmax[0] = params.Nmc_starts;
+	} else {
+		int auxmin = 0, t;
+		int delta = ceil((1.0*params.Nmc_starts)/params.threads);
+		for(t = 0; t < params.threads; t++) {
+			Nmin[t] = auxmin;
+			Nmax[t] = Nmin[t] + delta -1;
+			auxmin = Nmax[t] + 1;
+//			printf("%d %d %d \n", Nmin[t], Nmax[t], delta);
+		}
+	}
+	idx_chain_1 = (int)rand() % params.Nmc_starts;
+	idx_chain_2 = (int)rand() % params.Nmc_starts;
+
+	while(idx_chain_1 == idx_chain_2)
+		idx_chain_2 = (int)rand() % params.Nmc_starts;
+#pragma omp parallel shared(idx_chain_1, idx_chain_2,  Nmin, Nmax)
+{
+	int curr_state[L];
+	int i, s;
 	int test_chain_eq;
 	bool test_chain_half;
 	bool test_chain_sampl;
-	//int Neff = ceil((1.0*params.Nmc_starts) / params.num_threads);
-	idx_chain_1 = (int)rand() % params.Nmc_starts;
-	idx_chain_2 = (int)rand() % params.Nmc_starts;
-	while(idx_chain_1 == idx_chain_2)
-		idx_chain_2 = (int)rand() % params.Nmc_starts;
-//#pragma omp parallel for private(i,s)
-	for(t = 0; t < params.num_threads; t++) {
-		for(s = 0; s < params.Nmc_starts; s++) {
-			//int x[L];
-			//int *aux;
-			test_chain_eq = 0;
+//	printf("%d %d\n", Nmin[0], Nmax[0]);
+	for(s = Nmin[omp_get_thread_num()]; s <= Nmax[omp_get_thread_num()]; s++) {
+//		printf("%d\n", omp_get_thread_num());
+		test_chain_eq = 0;
+		for(i = 0; i < L; i++)
+			curr_state[i] = (int)rand() % q;
+		if(s == idx_chain_1) {
+			test_chain_eq = 1;
+			test_chain_sampl = true;
+			test_chain_half = true;
+		} else {
+			test_chain_half = false;
+			test_chain_sampl = false;
+		}
+		if(s == idx_chain_2)
+			test_chain_eq = 2;
+		mc_chain(curr_state, test_chain_sampl, test_chain_half, test_chain_eq, omp_get_thread_num());
+		if(s == idx_chain_1) {
 			for(i = 0; i < L; i++)
-				curr_state[i] = (int)rand() % q;
-			if(s == idx_chain_1) {
-				test_chain_eq = 1;
-				test_chain_sampl = true;
-				test_chain_half = true;
-			} else {
-				test_chain_half = false;
-				test_chain_sampl = false;
-			}
-			if(s == idx_chain_2)
-				test_chain_eq = 2;
-			mc_chain(test_chain_sampl, test_chain_half, test_chain_eq);
-			if(s == idx_chain_1) {
-				for(i = 0; i < L; i++)
-					chain_fin_1[i] = curr_state[i];
-			}
-			if(s == idx_chain_2) {
-				for(i = 0; i < L; i++)
-					chain_fin_2[i] = curr_state[i];
+				chain_fin_1[i] = curr_state[i];
+		}
+		if(s == idx_chain_2) {
+			for(i = 0; i < L; i++)
+				chain_fin_2[i] = curr_state[i];
+		}
+	}
+}
+	if(params.threads > 1)
+		update_par_stat();
+	return 0;
+}
+
+int update_par_stat()
+{
+	int t, i ,j,a,b;
+	for(i = 0; i < L; i++) {
+		for(a = 0; a < q; a++){
+			for(t = 0; t < params.threads; t++)
+				fm_s[i*q +a] += fm_s_t[t][i*q+a];
+		}
+	}
+	for(i = 0; i < L; i++) {
+		for(j = 0; j < L; j++) {
+			for(a = 0; a < q; a++) {
+				for(b = 0; b< q; b++) {
+					for(t = 0; t < params.threads; t++)
+						sm_s[i*q+a][j*q+b] += sm_s_t[t][i*q+a][j*q+b];
+				}
 			}
 		}
 	}
@@ -1429,7 +1524,7 @@ int equilibration_test()
 	return 0;
 }
 
-int metropolis_step() 
+int metropolis_step(int * curr_state) 
 {
 	int i, a, j;
 	double deltaE, p;
@@ -1450,7 +1545,7 @@ int metropolis_step()
 	return 0;
 }
 
-int gibbs_step()
+int gibbs_step(int * curr_state)
 {
 	int a, i, j;
 	double H[q], p[q+1];
@@ -1485,7 +1580,7 @@ int gibbs_step()
 	return 0;
 }
 
-int mc_chain(bool test_chain_sampl, bool test_chain_half, int test_chain_eq)
+int mc_chain(int * curr_state, bool test_chain_sampl, bool test_chain_half, int test_chain_eq, int thread)
 {
 	int t = 0,n,i;
 	FILE * fp = 0, * fe = 0;
@@ -1523,7 +1618,7 @@ int mc_chain(bool test_chain_sampl, bool test_chain_half, int test_chain_eq)
 			else
 				gibbs_step(curr_state);
 		}
-		update_statistics(curr_state);
+		update_statistics(curr_state, thread);
 		if(test_chain_sampl == true && n == params.Nmc_config/2) {
 			for(i = 0; i < L; i++)
 				intra_chain[i] = curr_state[i];
@@ -1585,12 +1680,13 @@ int update_parameters(double regJ)
 					averrJ += fabs(sm_s[i*q +a][j*q +b] - sm[i*q +a][j*q +b]);
 					merrJ =  max(merrJ, fabs(sm_s[i*q+a][j*q+b] - sm[i*q+a][j*q+b]));
 					J[i*q + a][j*q + b] += params.lrateJ * adaptive_learn(i, a, j, b, 'J', sm[i*q+a][j*q+b] - sm_s[i*q+a][j*q+b])
-							- regJ * ( (J[i*q +a][j*q + b] > 0)  - (J[i*q +a][j*q+b] < 0) ) ;
+							- regJ * dec[i*q+a][j*q+b] * ( (J[i*q +a][j*q + b] > 0)  - (J[i*q +a][j*q+b] < 0) ) ;
 					J[j*q + b][i*q + a] = J[i*q + a][j*q + b];
 				}
 			}
 		}
 	}
+//	printf("%f %f\n", J[0*q+0][3*q+0], dec[0*q+0][3*q+0]);
 	averrh /= L*q;
 	averrJ /= (L*(L-1)/2)*q*q;
 
@@ -1688,6 +1784,110 @@ double adaptive_learn(int i, int a, int j, int b, char type, double grad)
 		return grad;
 }
 
+int remove_gauge_freedom()
+{
+	if(params.dgap || params.gapnn || params.phmm)
+		return 0;
+	else {
+		fprintf(stdout, "Removing gauge freedom...");
+		fflush(stdout);
+		int n, neff, k, i, j, a, b, index;
+		n = (L*(L-1)*q*q)/2;
+		neff = (L*(L-1)*(2*q-1))/2 + L;
+		for(k = 0; k < n; k++){
+			i = idx[k][0];
+			a = idx[k][2];
+			j = idx[k][1];
+			b = idx[k][3];
+			tmp_idx[k] = k;
+			sorted_struct[k] = fabs(sm[i*q+a][j*q+b]) + params.pseudocount * 0.1 * rand01();
+		}
+		quicksort(sorted_struct, tmp_idx, 0, n-1);
+		for(k = 0; k < neff; k++) {
+			index = tmp_idx[k];
+			i = idx[index][0];
+			a = idx[index][2];
+			j = idx[index][1];
+			b = idx[index][3];
+			//fprintf(stderr, "%i %f\n", index, J[idx[index][0]*q+idx[index][2]][idx[index][1]*q + idx[index][3]]);
+			J[i*q + a][j*q + b] = 0.0;
+			J[j*q + b][i*q + a] = 0.0;
+	       		dec[i*q+a][j*q + b] = 0.0;
+			dec[j*q+b][i*q + a] = 0.0;
+		}
+		model_sp += 1.0*neff/n;
+		fprintf(stdout, "%d out of %d couplings have been removed\n", neff, n);
+		return 0;
+	}
+}
+
+int decimate_compwise(int c)
+{
+	int k, i, j, a, b;
+	int index;
+	int n, m = 0;
+	int neff;
+	FILE *fileout;
+	char filename_aux[1000];
+	sprintf(filename_aux, "sDKL_couplings_iter_%i.dat", iter);
+	fileout = fopen(filename_aux, "w");
+	maxsdkl = -1e50;
+	printf("n terms: %d\n",c);
+	if(params.dgap)
+		n = (L*(L-1)*(q-1)*(q-1))/2;
+	else if(params.gapnn)
+		n = (L*(L-1)*(q-1)*(q-1))/2 + L - 1;
+	else if(params.phmm)
+		n = 2*L - 1;
+	else {
+		neff = (L*(L-1)*q*q)/2 - (L*(L-1)*(2*q-1))/2 + L;
+		n = (L*(L-1)*q*q)/2;
+	}
+
+	for(k = 0; k < n; k++) {
+		i = idx[k][0];
+		a = idx[k][2];
+		j = idx[k][1];
+		b = idx[k][3];
+		if(dec[i*q + a][j*q + b] > 0) {
+			m += 1;
+			sorted_struct[k] = J[i*q+a][j*q+b] * sm_s[i*q+a][j*q+b]
+					- (J[i*q+a][j*q+b] * exp(-J[i*q+a][j*q+b]) * sm_s[i*q+a][j*q+b]) / (exp(-J[i*q+a][j*q+b]) *sm_s[i*q+a][j*q+b] + 1 - sm_s[i*q+a][j*q+b]);
+			maxsdkl = max(maxsdkl, sorted_struct[k]);
+			fprintf(fileout, "%i %i %i %i %f %f\n", i, j, a, b, sorted_struct[k], J[i*q+a][j*q+b]);
+			//sorted_struct[k] += 1e-4 * rand01();
+			//fprintf(stderr, "sDKL %f\n", sorted_struct[k]);
+		} else {
+			double f = rand01();
+			sorted_struct[k] =  n * f; // to be optimized: elements should be removed instead of putting large numbers
+			//fprintf(stderr, "n %d fake %f rnd %f\n", n, sorted_struct[k], f);
+		}
+	}
+	fflush(fileout);
+	fclose(fileout);
+	fprintf(stdout, "Non-zeros parameters %d / %d \n",m,neff);
+	for(k = 0; k < n; k++) {
+		tmp_idx[k] = k;
+	}
+	quicksort(sorted_struct, tmp_idx, 0, n-1);
+	//for(k = 0; k < n; k++)
+	//	fprintf(stderr, "%f\n", sorted_struct[k]);
+	for(k = 0; k < c; k++) {
+		index = tmp_idx[k];
+		i = idx[index][0];
+		a = idx[index][2];
+		j = idx[index][1];
+		b = idx[index][3];
+		//fprintf(stderr, "%i %f\n", index, J[idx[index][0]*q+idx[index][2]][idx[index][1]*q + idx[index][3]]);
+		J[i*q + a][j*q + b] = 0.0;
+		J[j*q + b][i*q + a] = 0.0;
+	       	dec[i*q+a][j*q + b] = 0.0;
+		dec[j*q+b][i*q + a] = 0.0;
+	}
+	model_sp += 1.0*c/n;
+	return 0;
+}
+
 int decimate(int c)
 {
 	int k, i, j, a, b;
@@ -1709,14 +1909,14 @@ int decimate(int c)
 		b = idx[k][3];
 		if(dec[i*q + a][j*q + b] > 0) {
 			m += 1;
-			sortedJ[k] = params.empdec ? min(fabs(sm[i*q+a][j*q+b]) + rand01() * params.pseudocount, fabs(J[i*q+a][j*q+b])) : fabs(J[i*q+a][j*q+b]);
+			sorted_struct[k] = fabs(J[i*q+a][j*q+b]);
 		} else
-			sortedJ[k] = n * rand01(); // to be optimized: elements should be removed instead of putting large numbers
+			sorted_struct[k] = n * rand01(); // to be optimized: elements should be removed instead of putting large numbers
 	}
 	fprintf(stdout, "Non-zeros parameters %d / %d \n",m,n);
 	for(k = 0; k < n; k++)
 		tmp_idx[k] = k;
-	quicksort(sortedJ, tmp_idx, 0, n-1);
+	quicksort(sorted_struct, tmp_idx, 0, n-1);
 	for(k = 0; k < c; k++) {
 		index = tmp_idx[k];
 		i = idx[index][0];
@@ -1726,7 +1926,7 @@ int decimate(int c)
 		//fprintf(stderr, "%i %f\n", index, J[idx[index][0]*q+idx[index][2]][idx[index][1]*q + idx[index][3]]);
 		J[i*q + a][j*q + b] = 0.0;
 		J[j*q + b][i*q + a] = 0.0;
-		dec[i*q+a][j*q + b] = 0.0;
+	       	dec[i*q+a][j*q + b] = 0.0;
 		dec[j*q+b][i*q + a] = 0.0;
 	}
 	model_sp += 1.0*c/n;
