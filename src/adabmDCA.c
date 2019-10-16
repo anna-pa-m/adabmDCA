@@ -1828,6 +1828,7 @@ int decimate_compwise(int c)
 	int n, m = 0;
 	int neff;
 	FILE *fileout;
+	double auxsm;
 	char filename_aux[1000];
 	sprintf(filename_aux, "sDKL_couplings_iter_%i.dat", iter);
 	fileout = fopen(filename_aux, "w");
@@ -1844,7 +1845,6 @@ int decimate_compwise(int c)
 		n = (L*(L-1)*q*q)/2;
 	}
 
-
 	for(k = 0; k < n; k++) {
 		tmp_idx[k] = k;
 		sorted_struct[k] = 0.0;
@@ -1854,10 +1854,11 @@ int decimate_compwise(int c)
 		b = idx[k][3];
 		if(dec[i*q + a][j*q + b] > 0) {
 			m += 1;
-			sorted_struct[k] = J[i*q+a][j*q+b] * sm_s[i*q+a][j*q+b]
-					- (J[i*q+a][j*q+b] * exp(-J[i*q+a][j*q+b]) * sm_s[i*q+a][j*q+b]) / (exp(-J[i*q+a][j*q+b]) *sm_s[i*q+a][j*q+b] + 1 - sm_s[i*q+a][j*q+b]);
+			auxsm = sm_s[i*q+a][j*q+b] == 0 ? params.pseudocount : sm_s[i*q+a][j*q+b];
+			sorted_struct[k] = J[i*q+a][j*q+b] * auxsm
+					- (J[i*q+a][j*q+b] * exp(-J[i*q+a][j*q+b]) * auxsm) / (exp(-J[i*q+a][j*q+b]) *auxsm + 1 - auxsm);
 			maxsdkl = max(maxsdkl, sorted_struct[k]);
-			fprintf(fileout, "%i %i %i %i %.2e %f\n", i, j, a, b, sorted_struct[k], J[i*q+a][j*q+b]);
+			fprintf(fileout, "%i %i %i %i %.2e %f %f %f\n", i, j, a, b, sorted_struct[k], J[i*q+a][j*q+b], dec[i*q+a][j*q+b], sm_s[i*q+a][j*q+b]);
 			//sorted_struct[k] += 1e-4 * rand01();
 		} else {
 			double f = rand01();
@@ -1865,8 +1866,6 @@ int decimate_compwise(int c)
 			//fprintf(stderr, "n %d fake %f rnd %f\n", n, sorted_struct[k], f);
 		}
 	}
-	fflush(fileout);
-	fclose(fileout);
 	fprintf(stdout, "Non-zeros parameters %d / %d \n",m, neff);
 	quicksort(sorted_struct, tmp_idx, 0, n-1);
 	for(k = 0; k < c; k++) {
@@ -1881,8 +1880,18 @@ int decimate_compwise(int c)
 	       	dec[i*q+a][j*q + b] = 0.0;
 		dec[j*q+b][i*q + a] = 0.0;
 	}
+	for(k = 0; k<=c; k++) {
+		index = tmp_idx[k];
+		i = idx[index][0];
+		a = idx[index][2];
+		j = idx[index][1];
+		b = idx[index][3];
+		fprintf(fileout, "%i %i %i %i %.2e %f * \n", i, j, a, b, sorted_struct[k], J[i*q+a][j*q+b]);
+	}
 	index = tmp_idx[c];
-	fprintf(stdout, "Smallest sDKL associated with the first kept coupling is %1.e (for %i %i %i %i)\n", sorted_struct[index], idx[index][0], idx[index][1], idx[index][2], idx[index][3]);
+	fflush(fileout);
+	fclose(fileout);
+	fprintf(stdout, "Smallest sDKL associated with the first kept coupling is %.2e (i: %i j: %i a: %i b: %i)\n", sorted_struct[c], idx[index][0], idx[index][1], idx[index][2], idx[index][3]);
 	model_sp += 1.0*c/n;
 	return 0;
 }
