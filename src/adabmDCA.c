@@ -14,10 +14,11 @@
 struct Params {
 
 	char * file_msa, * file_w , * file_params, init, * label, * ctype, * file_3points, *file_cc, *file_samples, *file_en;
-	bool Metropolis, Gibbs, dgap, gapnn, phmm, blockwise, compwise;
+	bool Metropolis, Gibbs, rmgauge, dgap, gapnn, phmm, blockwise, compwise;
 	double sparsity, rho, w_th,  regJ, lrateJ, lrateh, conv, pseudocount;
-	int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, threads, Nmc_config, Nmc_config_max, Tcheck, Twait_max, Twait, maxiter;
+	int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, threads, Nmc_config, Nmc_config_max, Twait, maxiter;
 } params = {
+	.rmgauge = false,
 	.phmm = false,
 	.ctype = 0,
 	.pseudocount = 0,
@@ -42,13 +43,11 @@ struct Params {
 	.Nmc_config = 50,
 	.w_th = 0.2,
 	.threads = 1,
-	.Twait = 2000,
-	.Teq = 5000,
+	.Twait = 0,
+	.Teq = 0,
 	.maxiter = 2000,
 	.nprint = 100,
-	.Tcheck = 50,
 	.nprintfile = 500,
-	.Twait_max = 500,
 	.Nmc_config_max = 100,
 	.learn_strat = 0, // learning strategy: learning_rate / (1 + iter/tau)
 	.rho = 0.98, // adadelta reinforment
@@ -90,11 +89,11 @@ double * mean_ai;
 double * mean_aj;
 int * chain_init_1;
 int * chain_init_2;
-int * chain_fin_1;
-int * chain_fin_2;
+int * chain1;
+int * chain2;
 int * intra_chain;
 int * half_chain;
-int idx_chain_1, idx_chain_2;
+
 
 
 int q = 21, L, M;
@@ -123,8 +122,8 @@ int print_model(char * filename);
 int print_msa(char * filename);
 int print_statistics(char * file_sm, char *file_fm, char *file_tm);
 int sample();
-int mc_chain(int * curr_state, bool test_chain_sampl, bool test_chain_half, int test_chain_eq, int t);
-int gibbs_step(int * curr_state);
+int mc_chain(int * curr_state, int thread);
+double gibbs_step(int * curr_state, double gibbs_en);
 int metropolis_step(int * curr_state);
 void permute(int * vector, int s);
 double energy(int *seq);
@@ -151,6 +150,7 @@ int equilibration_test();
 int main(int argc, char ** argv)
 {
 	int c, n;
+	bool print_aux = false;
 	bool conv = false;
 	char score[1000];
 	char sec[1000];
@@ -158,11 +158,8 @@ int main(int argc, char ** argv)
 	char third[1000];
 	char par[1000];
 	char sc;
-	while ((c = getopt(argc, argv, "y:b:f:w:l:u:v:s:n:m:p:j:t:i:a:c:z:g:e:k:x:S:d:T:C:MGIRhDNE:Ho:BW")) != -1) {
+	while ((c = getopt(argc, argv, "y:b:f:w:l:u:v:s:n:m:p:j:t:i:a:c:z:g:e:k:x:S:d:T:C:MGIRAhDNE:HBW")) != -1) {
 		switch (c) {
-			case 'o':
-				params.Tcheck = atoi(optarg);
-				break;
 			case 'b':
 				params.ctype = optarg;
 				break;
@@ -257,6 +254,9 @@ int main(int argc, char ** argv)
 			case 'g':
 				params.regJ = atof(optarg);
 				break;
+			case 'A':
+				params.rmgauge = true;
+				break;
 			case 'M':
 			 	params.Metropolis = true;
 				params.Gibbs = false;
@@ -280,6 +280,7 @@ int main(int argc, char ** argv)
 				fprintf(stdout, "-d : Pseudo-count, default: 1/M \n");
 				fprintf(stdout, "-b : Alphabet. \n  \ta : amino-acids. \n \tn : nucleic acids. \n \ti : present/absent. \n \te : epigenetic data. \n \tDefault: a\n");
 				fprintf(stdout, "-w : (optional file) weights file\n");
+				fprintf(stdout, "-A : (flag) Remove gauge invariance\n");
 				fprintf(stdout, "-S : (optional file) file name in which print configurations at convergence\n");
 				fprintf(stdout, "-E : (optional file) file name in which print energy's configurations at convergence\n");
 				fprintf(stdout, "-T : (optional file) (i j k a b c) indices for third order correlations\n");
@@ -299,7 +300,6 @@ int main(int argc, char ** argv)
 				fprintf(stdout, "-P : (flag) Decimate J(i,j,a,b) looking at min(sec. mom., parameter)\n");
 				fprintf(stdout, "-H : (flag) Hmmer-like model: profile + couplings(gap, gap) for nearest-neighbours\n");
 				fprintf(stdout, "-y : Seed of random number generator, default: %d\n", params.seed);
-				fprintf(stdout, "-o : Perform equilibration check every %d iterations\n", params.Tcheck);
 				fprintf(stdout, "-s : Metropolis chains, default: %d\n", params.Nmc_starts);
 				fprintf(stdout, "-n : Number of MC configurations per chain, default: %d\n", params.Nmc_config);
 				fprintf(stdout, "-p : (optional file) Initial parameters J, h, default: random [-1e-3, 1e-3]\n");
@@ -338,10 +338,14 @@ int main(int argc, char ** argv)
 		return EXIT_FAILURE;
 	}
 	read_msa();
+	if(!params.Twait)
+		params.Twait = 5*L;
+	if(!params.Teq)
+		params.Teq = 10*L;
 	if(params.Metropolis)
-		fprintf(stdout, "Performing Metropolis-Hastings MC: sample every %d configurations (eq. time is %d), using %d seeds. \nTot number of points %d\n", params.Twait, params.Teq, params.Nmc_starts, params.Nmc_starts * params.Nmc_config);
-	else if(params.Gibbs) {
-		fprintf(stdout, "Performing Gibbs sampling: sample every %d configurations (eq. time is %d), using %d seeds.\nTot number of points %d\n", params.Twait, params.Teq, params.Nmc_starts, params.Nmc_starts * params.Nmc_config);
+		fprintf(stdout, "Performing Metropolis-Hastings MC.\nInitial sampling time: %d\nInitial equilibration time: %d\nUsing %d seeds and tot. number of points %d\n", params.Twait, params.Teq, params.Nmc_starts, params.Nmc_starts * params.Nmc_config);
+	else if(params.Gibbs) {	
+		fprintf(stdout, "Performing Gibbs sampling.\nInitial sampling time: %d\nInitial equilibration time: %d\nUsing %d seeds and tot. number of points %d\n", params.Twait, params.Teq, params.Nmc_starts, params.Nmc_starts * params.Nmc_config);
 	}
 	fprintf(stdout, "Learning strategy:\n");
 	switch(params.learn_strat) {
@@ -375,7 +379,7 @@ int main(int argc, char ** argv)
 	compute_empirical_statistics();
 	initialize_parameters();
 	iter = 1;
-	fprintf(stdout, "Printing every %d iterations\n", params.nprint);
+	fprintf(stdout, "Printing every %d iteration(s)\n", params.nprint);
 	if(params.dgap) {
 		n = (L*(L-1)*(q-1)*(q-1))/2;
 	} if(params.gapnn) {
@@ -385,22 +389,26 @@ int main(int argc, char ** argv)
 	} else {
 	        n = (L*(L-1)*q*q)/2;
 	}
-	if(params.blockwise || params.compwise)
+
+	if(params.blockwise || params.compwise || params.rmgauge)
 		remove_gauge_freedom();
+
+	load_third_order_indices();
 	while(!conv && iter < params.maxiter) {
+		print_aux = false;
 		init_statistics();
 		sample();
-		if(iter % params.Tcheck == 0)
-			equilibration_test();
 		update_parameters(params.regJ);
 		if(model_sp < params.sparsity && iter % 10 == 0) {
 			fprintf(stdout, "Decimating..");
 			decimate(ceil((n*10)/(params.maxiter*0.5)));
-		} else if(params.compwise && iter % 10 == 0) {
+		} else if(params.compwise && check_convergence()) {
 			fprintf(stdout,"Decimating..");
-			decimate_compwise(ceil((n*2)/(params.maxiter*0.9)));
+			int aux = ceil( (1.0 - model_sp) * n / 100);
+			decimate_compwise(aux);
+			print_aux = true;
 		}
-		if(check_convergence() && params.sparsity == 0)
+		if(check_convergence() && params.sparsity == 0 && !params.compwise)
 			conv = true;
 		if(model_sp >= params.sparsity && params.sparsity > 0 && check_convergence())
 			conv = true;
@@ -408,23 +416,25 @@ int main(int argc, char ** argv)
 			fprintf(stdout, "it: %i N: %i Teq: %i Twait: %i merr_fm: %.1e merr_sm: %.1e averr_fm: %.1e averr_sm: %.1e cov_err: %.1e corr: %.2f sp: %.1e max_sdkl: %.1e\n", iter, params.Nmc_config * params.Nmc_starts, params.Teq, params.Twait, merrh, merrJ, averrh, averrJ, errnorm, pearson(), model_sp, maxsdkl);
 			fflush(stdout);
 		}
-		if(iter % params.nprintfile == 0) {
+		if(iter % params.nprintfile == 0 || print_aux) {
 			sc = (params.Gibbs == 0) ? 'M' : 'G';
-			sprintf(par, "Parameters_tmp_zerosum_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
-			sprintf(score, "Score_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
+			sprintf(par, "Parameters_tmp_%d_zerosum_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
+			sprintf(score, "Score_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
 			compute_frobenius_norms(score, par);
-			sprintf(par, "Parameters_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
+			sprintf(par, "Parameters_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
 			print_model(par);
-			sprintf(sec, "Sec_mom_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
-			sprintf(first, "First_mom_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
-			sprintf(third, "Third_mom_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
+			sprintf(sec, "Sec_mom_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
+			sprintf(first, "First_mom_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
+			sprintf(third, "Third_mom_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
+			if(compute_tm)
+				compute_third_order_correlations();
 			print_statistics(sec, first, third);
 		}
 		iter++;
 	}
 	params.threads = 1;
 	omp_set_num_threads(params.threads);
-	load_third_order_indices();
+	//load_third_order_indices();
 	if(params.file_samples)
 		print_samples = true;
 	if(params.file_en)
@@ -784,7 +794,7 @@ int compute_third_order_correlations()
 		a = tm_index[ind][3];
 		b = tm_index[ind][4];
 		c = tm_index[ind][5];
-		tm[ind] = tm[ind] - sm[i*q+a][j*q+b]*fm[k*q+c] - sm[i*q+a][k*q+c]*fm[j*q+b] - sm[j*q+b][k*q+c]*fm[i*q+a] + 2*fm[i*q+a]*fm[j*q+b]*fm[k*q+c];
+		//tm[ind] = tm[ind] - sm[i*q+a][j*q+b]*fm[k*q+c] - sm[i*q+a][k*q+c]*fm[j*q+b] - sm[j*q+b][k*q+c]*fm[i*q+a] + 2*fm[i*q+a]*fm[j*q+b]*fm[k*q+c];
 		tm_s[ind] = tm_s[ind] - sm_s[i*q+a][j*q+b]*fm_s[k*q+c] - sm_s[i*q+a][k*q+c]*fm_s[j*q+b] - sm_s[j*q+b][k*q+c]*fm_s[i*q+a] + 2*fm_s[i*q+a]*fm_s[j*q+b]*fm_s[k*q+c]; 
 	}
 	return 0;
@@ -893,7 +903,7 @@ int alloc_structures()
 			mtj[i] = (double *)calloc(L*q, sizeof(double));
 		}
 	}
-	if(params.sparsity > 0 || params.compwise || params.blockwise) {
+	if(params.sparsity > 0 || params.compwise || params.blockwise || params.rmgauge) {
 		int n = L*(L-1)*q*q/2;
 		idx = (int **)calloc(n, sizeof(int *));
 		sorted_struct = (double *)calloc(n, sizeof(double));
@@ -912,8 +922,8 @@ int alloc_structures()
 	chain_init_1 = (int *)calloc(L, sizeof(int));
 	chain_init_2 = (int *)calloc(L, sizeof(int));
 	half_chain = (int *)calloc(L, sizeof(int));
-	chain_fin_1 = (int *)calloc(L, sizeof(int));
-	chain_fin_2 = (int *)calloc(L, sizeof(int));
+	chain1 = (int *)calloc(L, sizeof(int));
+	chain2 = (int *)calloc(L, sizeof(int));
 	intra_chain = (int *)calloc(L, sizeof(int));
 	return 0;
 }
@@ -966,7 +976,7 @@ int compute_empirical_statistics()
 
 int init_statistics()
 {
-	int i, j, a, b;
+	int ind, i, j,  a, b;
 	for(i = 0; i < L; i++) {
 		for(a = 0; a < q; a++) {
 			fm_s[i*q + a] = 0;
@@ -979,6 +989,10 @@ int init_statistics()
 			}
 		}
 	}
+
+	for(ind = 0; ind < ntm; ind ++) 
+		tm_s[ind] = 0;
+	
 	if(params.threads > 1) {
 		int t;
 		for(t = 0; t < params.threads; t++) {
@@ -1168,14 +1182,7 @@ int compute_frobenius_norms(char *filename, char *parfile)
 				hzs[i*q+a] += mean_aj[a] - mean_all;
 		}
 	}
-//	for(i = 0; i < L; i++) {
-//		mean_all = 0;
-//		for(a = 0; a < q; a ++)
-//			mean_all += h[i*q+a];
-//		mean_all /= q;
-//		for(a = 0; a < q; a++)
-//			hzs[i*q+a] = h[i*q+a] - mean_all;
-//	}
+
 	for(i = 0; i < L; i++) {
 		for(j = i+1; j < L; j++) {
 			for(a = 0; a < q; a++) {
@@ -1390,7 +1397,7 @@ int initialize_parameters()
 		}
 		fprintf(stdout, "done\nNumber of links %d\n", links);
 	}
-	if(params.sparsity > 0 || params.compwise || params.blockwise) {
+	if(params.sparsity > 0 || params.compwise || params.blockwise || params.rmgauge) {
 		int k = 0;
 		for(i = 0; i < L; i++) {
 			for(j = i+1; j < L; j++) {
@@ -1400,7 +1407,7 @@ int initialize_parameters()
 						idx[k][1] = j;
 						idx[k][2] = a;
 						idx[k][3] = b;
-						sorted_struct[k] = J[i*q+a][j*q+b];
+						sorted_struct[k] = 0.0;
 						k += 1;
 					}
 				}
@@ -1415,12 +1422,14 @@ int initialize_parameters()
 int sample()
 {
 	int Nmin[params.threads], Nmax[params.threads];
+
+	equilibration_test();
 	if(params.threads == 1) {
 		Nmin[0] = 0;
 		Nmax[0] = params.Nmc_starts;
 	} else {
 		int auxmin = 0, t;
-		int delta = ceil((1.0*params.Nmc_starts)/params.threads);
+		int delta = ceil((1.0*(params.Nmc_starts))/params.threads);
 		for(t = 0; t < params.threads; t++) {
 			Nmin[t] = auxmin;
 			Nmax[t] = Nmin[t] + delta -1;
@@ -1428,43 +1437,17 @@ int sample()
 //			printf("%d %d %d \n", Nmin[t], Nmax[t], delta);
 		}
 	}
-	idx_chain_1 = (int)rand() % params.Nmc_starts;
-	idx_chain_2 = (int)rand() % params.Nmc_starts;
 
-	while(idx_chain_1 == idx_chain_2)
-		idx_chain_2 = (int)rand() % params.Nmc_starts;
-#pragma omp parallel shared(idx_chain_1, idx_chain_2,  Nmin, Nmax)
+#pragma omp parallel shared(Nmin, Nmax)
 {
 	int curr_state[L];
 	int i, s;
-	int test_chain_eq;
-	bool test_chain_half;
-	bool test_chain_sampl;
 //	printf("%d %d\n", Nmin[0], Nmax[0]);
 	for(s = Nmin[omp_get_thread_num()]; s <= Nmax[omp_get_thread_num()]; s++) {
-//		printf("%d\n", omp_get_thread_num());
-		test_chain_eq = 0;
+//		printf("%d\n", omp_get_thread_num());	
 		for(i = 0; i < L; i++)
 			curr_state[i] = (int)rand() % q;
-		if(s == idx_chain_1) {
-			test_chain_eq = 1;
-			test_chain_sampl = true;
-			test_chain_half = true;
-		} else {
-			test_chain_half = false;
-			test_chain_sampl = false;
-		}
-		if(s == idx_chain_2)
-			test_chain_eq = 2;
-		mc_chain(curr_state, test_chain_sampl, test_chain_half, test_chain_eq, omp_get_thread_num());
-		if(s == idx_chain_1) {
-			for(i = 0; i < L; i++)
-				chain_fin_1[i] = curr_state[i];
-		}
-		if(s == idx_chain_2) {
-			for(i = 0; i < L; i++)
-				chain_fin_2[i] = curr_state[i];
-		}
+		mc_chain(curr_state, omp_get_thread_num());
 	}
 }
 	if(params.threads > 1)
@@ -1498,29 +1481,125 @@ int equilibration_test()
 {
 
 	int q_int_chain = 0, q_ext_chain = 0;
-	int q_half_first = 0, q_first = 0;
-	int i;
+	int q_half_time = 0, q_first = 0;
+	int i, t;
+	double delta, gibbs_en1 = 0, gibbs_en2 = 0;
+	int Teq = 0, Ts = 0;
+
 	for(i = 0; i < L; i++) {
-		if(chain_fin_1[i] == chain_fin_2[i])
-			q_ext_chain++;
-		if(intra_chain[i] == chain_fin_1[i])
-			q_int_chain++;
-		if(half_chain[i] == chain_init_1[i])
-			q_half_first++;
-		if(chain_init_1[i] == chain_init_2[i])
+		chain1[i] = (int)rand() % q;
+		chain2[i] = (int)rand() % q;
+	}
+
+	if(params.Gibbs) {
+		gibbs_en1 = energy(chain1);
+		gibbs_en2 = energy(chain2);
+	}
+
+	for(t = 0; t < params.Teq; t++) {
+		if(t == params.Teq/2)
+			for(i = 0; i < L; i++)
+				half_chain[i] = chain1[i];
+		if(params.Metropolis) {
+			metropolis_step(chain2);
+			metropolis_step(chain1);
+		} else {
+			gibbs_en1 = gibbs_step(chain1, gibbs_en1);
+			gibbs_en2 = gibbs_step(chain2, gibbs_en2);
+		}
+	}
+
+	for(i = 0; i < L; i++) {
+		if(half_chain[i] == chain1[i])
+			q_half_time++;
+		if(chain1[i] == chain2[i])
 			q_first++;
 	}
-	printf("q_int_chain: %d q_ext_chain: %d\n", q_int_chain, q_ext_chain);
-	printf("q_half_fisrt: %d q_first: %d\n", q_half_first, q_first);
-	if(1.0*(q_int_chain - q_ext_chain)/L > 0.05) {
-		fprintf(stdout, "Increasing sampl. time: q(halftime config.(A),last config.(A)): %d q(last config.(A), last config.(B)): %d\n", q_int_chain, q_ext_chain);
-		params.Twait *= 1.05;
+
+	delta = 1.0*(q_half_time - q_first)/L;
+	if(delta > 0.00)
+		fprintf(stdout,"Increasing eq. time: q(Teq/2(A), Teq(A)): %d q(Teq(A), Teq(B)): %d...", q_half_time, q_first);
+	Teq = params.Teq;
+
+	while(delta > 0.00) {
+		Teq++;
+		q_half_time = 0;
+		q_first = 0;
+		if(params.Metropolis) {
+			metropolis_step(chain1);
+			metropolis_step(chain2);
+		} else {
+			gibbs_en1 = gibbs_step(chain1, gibbs_en1);
+			gibbs_en2 = gibbs_step(chain2, gibbs_en2);
+		}
+
+		for(i = 0; i < L; i++) {
+			if(half_chain[i] == chain1[i])
+				q_half_time++;
+			if(chain1[i] == chain2[i])
+				q_first++;
+		}
+		delta = 1.0*(q_half_time - q_first)/L;
+	}
+	if(Teq > params.Teq)
+		fprintf(stdout, "Teq: %d\n", Teq);
+	params.Teq = Teq;
+
+	for(i = 0; i < L; i++) {
+		chain_init_2[i] = chain2[i];
+		chain_init_1[i] = chain1[i];
+	}
+
+	for(t = 0; t < params.Twait; t++){
+		if(params.Metropolis) {
+			metropolis_step(chain1);
+			metropolis_step(chain2);
+		} else {
+			gibbs_en1 = gibbs_step(chain1, gibbs_en1);
+			gibbs_en2 = gibbs_step(chain2, gibbs_en2);
+		}
+		if(t == params.Twait/2)
+			for(i = 0; i < L; i++)
+				intra_chain[i] = chain1[i];
+	}
+
+
+	for(i = 0; i < L; i++) {
+		if(chain1[i] == chain2[i])
+			q_ext_chain++;
+		if(intra_chain[i] == chain1[i])
+			q_int_chain++;
+	}
+
+	delta = 1.0*(q_int_chain - q_ext_chain)/L;
+
+	if (delta > 0.0)
+		fprintf(stdout, "Increasing sampl. time: q(halftime config.(A),last config.(A)): %d q(last config.(A), last config.(B)): %d...", q_int_chain, q_ext_chain);
+
+	Ts = params.Twait;
+	while(delta > 0.0) {
+		Ts++;
+		q_ext_chain = 0;
+		q_int_chain = 0;
+		if(params.Metropolis) {
+			metropolis_step(chain1);
+			metropolis_step(chain2);
+		} else {
+			gibbs_en1 = gibbs_step(chain1, gibbs_en1);
+			gibbs_en2 = gibbs_step(chain2, gibbs_en2);
+		}
+		for(i = 0; i < L; i++) {
+			if(chain1[i] == chain2[i])
+				q_ext_chain++;
+			if(intra_chain[i] == chain1[i])
+				q_int_chain++;
+		}
+		delta = 1.0*(q_int_chain - q_ext_chain)/L;
+	}
+	if(Ts > params.Twait)
+		fprintf(stdout,"Twait: %d\n", Ts);
+	params.Twait = Ts;
 	
-	}
-	if(1.0*(q_half_first - q_first)/L > 0.05) {
-		fprintf(stdout,"Increasing eq. time: q(Teq/2(A), Teq(A)): %d q(Teq(A), Teq(B)): %d\n", q_half_first, q_first);
-		params.Teq *= 1.05;
-	}
 	return 0;
 }
 
@@ -1545,7 +1624,7 @@ int metropolis_step(int * curr_state)
 	return 0;
 }
 
-int gibbs_step(int * curr_state)
+double gibbs_step(int * curr_state, double gibbs_en)
 {
 	int a, i, j;
 	double H[q], p[q+1];
@@ -1577,12 +1656,13 @@ int gibbs_step(int * curr_state)
 			gibbs_en = H[a];
 		}
 	}
-	return 0;
+	return gibbs_en;
 }
 
-int mc_chain(int * curr_state, bool test_chain_sampl, bool test_chain_half, int test_chain_eq, int thread)
+int mc_chain(int * curr_state, int thread)
 {
 	int t = 0,n,i;
+	double gibbs_en = 0;
 	FILE * fp = 0, * fe = 0;
 	if(print_samples)
 		fp  = fopen(params.file_samples, "a");
@@ -1593,36 +1673,21 @@ int mc_chain(int * curr_state, bool test_chain_sampl, bool test_chain_half, int 
 
 	while(t <= params.Teq) {
 		t++;
-		if(test_chain_half && t == params.Teq/2)
-			for(i = 0; i < L; i++)
-				half_chain[i] = curr_state[i];
 		if(params.Metropolis)
 			metropolis_step(curr_state);
 		else
-			gibbs_step(curr_state);
+			gibbs_en = gibbs_step(curr_state, gibbs_en);
 	}
 	for(n = 0; n < params.Nmc_config; n++) {
-		if(n == 0 && test_chain_eq == 1) {
-			for(i = 0; i < L; i++)
-				chain_init_1[i] = curr_state[i];
-		}
-		if(n == 0 && test_chain_eq == 2) {
-			for(i = 0; i < L; i++)
-				chain_init_2[i] = curr_state[i];
-		}
 		t = 0;
 		while(t <= params.Twait) {
 			t++;
 			if(params.Metropolis)
 				metropolis_step(curr_state);
 			else
-				gibbs_step(curr_state);
+				gibbs_en = gibbs_step(curr_state, gibbs_en);
 		}
 		update_statistics(curr_state, thread);
-		if(test_chain_sampl == true && n == params.Nmc_config/2) {
-			for(i = 0; i < L; i++)
-				intra_chain[i] = curr_state[i];
-		}
 		if(print_samples) {
 			for(i = 0; i < L; i++)
 				fprintf(fp, "%d ", curr_state[i]);
@@ -2046,14 +2111,16 @@ int print_statistics(char *file_sm, char *file_fm, char *file_tm)
 	if(params.file_3points) {
 		ft = fopen(file_tm, "w");
 		int k, c, ind;
+		double aux;
 		for(ind = 0; ind < ntm; ind++) {
 			i = tm_index[ind][0];
 			j = tm_index[ind][1];
 			k = tm_index[ind][2];
 			a = tm_index[ind][3];
 			b = tm_index[ind][4];
-			c = tm_index[ind][5];
-			fprintf(ft, "%d %d %d %d %d %d %.5f %.5f\n", i, j, k, a, b,c, tm[ind], tm_s[ind]);
+			c = tm_index[ind][5]; 
+			aux = tm[ind] - sm[i*q+a][j*q+b]*fm[k*q+c] - sm[i*q+a][k*q+c]*fm[j*q+b] - sm[j*q+b][k*q+c]*fm[i*q+a] + 2*fm[i*q+a]*fm[j*q+b]*fm[k*q+c];
+			fprintf(ft, "%d %d %d %d %d %d %.5f %.5f\n", i, j, k, a, b,c, aux, tm_s[ind]);
 		}
 		fflush(ft);
 		fclose(ft);
