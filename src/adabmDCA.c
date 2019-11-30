@@ -16,8 +16,9 @@ struct Params {
 	char * file_msa, * file_w , * file_params, init, * label, * ctype, * file_3points, *file_cc, *file_samples, *file_en;
 	bool Metropolis, Gibbs, rmgauge, dgap, gapnn, phmm, blockwise, compwise;
 	double sparsity, rho, w_th,  regJ, lrateJ, lrateh, conv, pseudocount;
-	int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, threads, Nmc_config, Nmc_config_max, Twait, maxiter;
+	int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, threads, Nmc_config, Nmc_config_max, Twait, Tcheck, maxiter;
 } params = {
+	.Tcheck = 20,
 	.rmgauge = false,
 	.phmm = false,
 	.ctype = 0,
@@ -158,8 +159,11 @@ int main(int argc, char ** argv)
 	char third[1000];
 	char par[1000];
 	char sc;
-	while ((c = getopt(argc, argv, "y:b:f:w:l:u:v:s:n:m:p:j:t:i:a:c:z:g:e:k:x:S:d:T:C:MGIRAhDNE:HBW")) != -1) {
+	while ((c = getopt(argc, argv, "y:b:f:w:l:u:v:s:n:m:p:j:t:o:i:a:c:z:g:e:k:x:S:d:T:C:MGIRAhDNE:HBW")) != -1) {
 		switch (c) {
+			case 'o':
+				params.Tcheck = atoi(optarg);
+				break;
 			case 'b':
 				params.ctype = optarg;
 				break;
@@ -300,13 +304,14 @@ int main(int argc, char ** argv)
 				fprintf(stdout, "-P : (flag) Decimate J(i,j,a,b) looking at min(sec. mom., parameter)\n");
 				fprintf(stdout, "-H : (flag) Hmmer-like model: profile + couplings(gap, gap) for nearest-neighbours\n");
 				fprintf(stdout, "-y : Seed of random number generator, default: %d\n", params.seed);
+				fprintf(stdout, "-o : Equilibration test is perfomed each X times, default: %d\n", params.Tcheck);
 				fprintf(stdout, "-s : Metropolis chains, default: %d\n", params.Nmc_starts);
 				fprintf(stdout, "-n : Number of MC configurations per chain, default: %d\n", params.Nmc_config);
 				fprintf(stdout, "-p : (optional file) Initial parameters J, h, default: random [-1e-3, 1e-3]\n");
 				fprintf(stdout, "-c : Convergence tolerance, default: %.3e\n", params.conv);
 				fprintf(stdout, "-j : Number of threads, default: %d\n", params.threads);
-				fprintf(stdout, "-e : MC Equilibration time, default: %d\n", params.Teq);
-				fprintf(stdout, "-t : Sampling time of MC algorithm, default: %d\n", params.Twait);
+				fprintf(stdout, "-e : Initial MC equilibration time, default: 10 * L\n");
+				fprintf(stdout, "-t : Initical sampling time of MC algorithm, default: 5 * L\n");
 				fprintf(stdout, "-i : Maximum number of iterations, default: %d\n", params.maxiter);
 				fprintf(stdout, "-z : Print output every x iterations, default: %d\n", params.nprint);
 				fprintf(stdout, "-m : Print Frobenius norms and parameters every x iterations, default: %d\n", params.nprintfile);
@@ -397,6 +402,10 @@ int main(int argc, char ** argv)
 	while(!conv && iter < params.maxiter) {
 		print_aux = false;
 		init_statistics();
+		if(iter % params.Tcheck == 0 || iter == 1) {
+			fprintf(stdout, "Equilibration test...\n");
+			equilibration_test();
+		}
 		sample();
 		update_parameters(params.regJ);
 		if(model_sp < params.sparsity && iter % 10 == 0) {
@@ -440,6 +449,7 @@ int main(int argc, char ** argv)
 	if(params.file_en)
 		print_en = true;
 	init_statistics();
+	equilibration_test();
 	sample(); // compute 3rd order moments through sampling and possibly print the sequences
 	if(compute_tm)
 		compute_third_order_correlations();
@@ -1423,7 +1433,6 @@ int sample()
 {
 	int Nmin[params.threads], Nmax[params.threads];
 
-	equilibration_test();
 	if(params.threads == 1) {
 		Nmin[0] = 0;
 		Nmax[0] = params.Nmc_starts;
