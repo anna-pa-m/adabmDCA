@@ -99,7 +99,7 @@ int * half_chain;
 
 int q = 21, L, M;
 double maxsdkl;
-double gibbs_en = 0.0, averrh, averrJ, merrh, merrJ, errnorm, model_sp;
+double averrh, averrJ, merrh, merrJ, errnorm, model_sp;
 int iter = 0;
 bool compute_tm = false;
 bool print_samples = false;
@@ -124,7 +124,7 @@ int print_msa(char * filename);
 int print_statistics(char * file_sm, char *file_fm, char *file_tm);
 int sample();
 int mc_chain(int * curr_state, int thread);
-double gibbs_step(int * curr_state, double gibbs_en);
+int gibbs_step(int * curr_state);
 int metropolis_step(int * curr_state);
 void permute(int * vector, int s);
 double energy(int *seq);
@@ -1492,7 +1492,7 @@ int equilibration_test()
 	int q_int_chain = 0, q_ext_chain = 0;
 	int q_half_time = 0, q_first = 0;
 	int i, t;
-	double delta, gibbs_en1 = 0, gibbs_en2 = 0;
+	double delta;
 	int Teq = 0, Ts = 0;
 
 	for(i = 0; i < L; i++) {
@@ -1500,10 +1500,6 @@ int equilibration_test()
 		chain2[i] = (int)rand() % q;
 	}
 
-	if(params.Gibbs) {
-		gibbs_en1 = energy(chain1);
-		gibbs_en2 = energy(chain2);
-	}
 
 	for(t = 0; t < params.Teq; t++) {
 		if(t == params.Teq/2)
@@ -1513,8 +1509,8 @@ int equilibration_test()
 			metropolis_step(chain2);
 			metropolis_step(chain1);
 		} else {
-			gibbs_en1 = gibbs_step(chain1, gibbs_en1);
-			gibbs_en2 = gibbs_step(chain2, gibbs_en2);
+			gibbs_step(chain1);
+			gibbs_step(chain2);
 		}
 	}
 
@@ -1538,8 +1534,8 @@ int equilibration_test()
 			metropolis_step(chain1);
 			metropolis_step(chain2);
 		} else {
-			gibbs_en1 = gibbs_step(chain1, gibbs_en1);
-			gibbs_en2 = gibbs_step(chain2, gibbs_en2);
+			gibbs_step(chain1);
+			gibbs_step(chain2);
 		}
 
 		for(i = 0; i < L; i++) {
@@ -1564,8 +1560,8 @@ int equilibration_test()
 			metropolis_step(chain1);
 			metropolis_step(chain2);
 		} else {
-			gibbs_en1 = gibbs_step(chain1, gibbs_en1);
-			gibbs_en2 = gibbs_step(chain2, gibbs_en2);
+			gibbs_step(chain1);
+			gibbs_step(chain2);
 		}
 		if(t == params.Twait/2)
 			for(i = 0; i < L; i++)
@@ -1594,8 +1590,8 @@ int equilibration_test()
 			metropolis_step(chain1);
 			metropolis_step(chain2);
 		} else {
-			gibbs_en1 = gibbs_step(chain1, gibbs_en1);
-			gibbs_en2 = gibbs_step(chain2, gibbs_en2);
+			gibbs_step(chain1);
+			gibbs_step(chain2);
 		}
 		for(i = 0; i < L; i++) {
 			if(chain1[i] == chain2[i])
@@ -1633,7 +1629,29 @@ int metropolis_step(int * curr_state)
 	return 0;
 }
 
-double gibbs_step(int * curr_state, double gibbs_en)
+int gibbs_step(int * curr_state)
+{
+	double H, cum[q];
+	int a, j;
+	int i = (int)rand() % L;
+	for(a = 0; a < q; a++) {
+		H = -h[i*q+a];
+		for(j = 0; j < L; j++) if(i != j) 
+			H += -J[i*q+a][j*q+curr_state[j]];
+		if(a == 0)
+			cum[a] = exp(-H);
+		else
+			cum[a] = cum[a-1] + exp(-H); 
+	}
+	double r = cum[q] * rand01();
+	a = 0;
+	while(r > cum[a])
+		a++;
+	curr_state[i] = a;
+	return 0;
+}
+
+double gibbs_step_old(int * curr_state, double gibbs_en)
 {
 	int a, i, j;
 	double H[q], p[q+1];
@@ -1671,21 +1689,18 @@ double gibbs_step(int * curr_state, double gibbs_en)
 int mc_chain(int * curr_state, int thread)
 {
 	int t = 0,n,i;
-	double gibbs_en = 0;
 	FILE * fp = 0, * fe = 0;
 	if(print_samples)
 		fp  = fopen(params.file_samples, "a");
 	if(print_en)
 		fe = fopen(params.file_en, "a");
-	if(params.Gibbs)
-		gibbs_en = energy(curr_state);
 
 	while(t <= params.Teq) {
 		t++;
 		if(params.Metropolis)
 			metropolis_step(curr_state);
 		else
-			gibbs_en = gibbs_step(curr_state, gibbs_en);
+			gibbs_step(curr_state);
 	}
 	for(n = 0; n < params.Nmc_config; n++) {
 		t = 0;
@@ -1694,7 +1709,7 @@ int mc_chain(int * curr_state, int thread)
 			if(params.Metropolis)
 				metropolis_step(curr_state);
 			else
-				gibbs_en = gibbs_step(curr_state, gibbs_en);
+				gibbs_step(curr_state);
 		}
 		update_statistics(curr_state, thread);
 		if(print_samples) {
@@ -1858,7 +1873,7 @@ double adaptive_learn(int i, int a, int j, int b, char type, double grad)
 		return grad;
 }
 
-int remove_gauge_freedom()
+int remove_gauge_freedom_old()
 {
 	if(params.dgap || params.gapnn || params.phmm)
 		return 0;
@@ -1874,7 +1889,7 @@ int remove_gauge_freedom()
 			j = idx[k][1];
 			b = idx[k][3];
 			tmp_idx[k] = k;
-			sorted_struct[k] = fabs(sm[i*q+a][j*q+b]) + params.pseudocount * 0.1 * rand01();
+			sorted_struct[k] = fabs(cov[i*q+a][j*q+b]) + params.pseudocount * 0.1 * rand01();
 		}
 		quicksort(sorted_struct, tmp_idx, 0, n-1);
 		for(k = 0; k < neff; k++) {
@@ -1893,6 +1908,49 @@ int remove_gauge_freedom()
 		fprintf(stdout, "%d out of %d couplings have been removed\n", neff, n);
 		return 0;
 	}
+}
+
+int remove_gauge_freedom()
+{
+	double sorted_matrix[q*q];
+	int mapping[q*q];
+	int idx_aux[q*q][2];
+	int i, j, a, b, k, index;
+	int n = (L*(L-1)*q*q)/2;
+	int n_block = 2*q-1;
+	int neff = 0;
+	for(i = 0; i < L; i++) {
+		for(j = i+1; j < L;j++) {
+			for(k = 0; k < q*q; k ++)
+				sorted_matrix[k] = 0;
+			k = 0;
+			for(a = 0; a < q; a++) {
+				for(b = 0; b < q; b++){
+					mapping[k] = k;
+					idx_aux[k][0] = a;
+					idx_aux[k][1] = b;
+					sorted_matrix[k] = fabs(cov[i*q+a][j*q+b]) + params.pseudocount * 0.001 * rand01();
+					k += 1;
+				}
+			}
+			quicksort(sorted_matrix, mapping, 0, q*q - 1);
+			for(k = 0; k < n_block; k++) {
+				index = mapping[k];
+				a = idx_aux[index][0];
+				b = idx_aux[index][1];
+				//fprintf(stdout, "Setting to zero J %d %d %d %d because the associated cov is %.2e\n",i,j,a,b,cov[i*q+a][j*q+b]);
+				J[i*q+a][j*q+b] = 0.0;
+				dec[i*q+a][j*q+b] = 0.0;
+				J[j*q+b][i*q+a] = 0.0;
+				dec[j*q+b][i*q+a] = 0.0;
+			}
+			model_sp += (2*q-1)/(1.0*n);
+			neff += 2*q -1;
+		}
+	}
+
+	fprintf(stdout, "%d out of %d couplings have been removed\n", neff, n);
+	return 0;
 }
 
 int decimate_compwise(int c)
