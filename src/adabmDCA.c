@@ -1643,7 +1643,7 @@ int gibbs_step(int * curr_state)
 		else
 			cum[a] = cum[a-1] + exp(-H); 
 	}
-	double r = cum[q] * rand01();
+	double r = cum[q-1] * rand01();
 	a = 0;
 	while(r > cum[a])
 		a++;
