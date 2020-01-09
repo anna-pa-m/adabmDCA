@@ -1206,6 +1206,7 @@ int compute_frobenius_norms(char *filename, char *parfile)
 			fprintf(fpp, "h %d %d %f\n", i,a,hzs[i*q+a]);
 	int nf = 0;
 	for(i = 0; i < L; i++) {
+		fi[i] = 0;
 		for(j = 0; j < L; j++) {
 			fb[i*L+j] = 0;
 			if(i != j) {
