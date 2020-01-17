@@ -79,7 +79,11 @@ int main(int argc, char ** argv) {
   }
   if(params.sparsity > 0.0) {
     params.regJ = 0;
-    fprintf(stdout, "Sparsity %.3f, using direct decimation on couplings\n", params.sparsity);
+    fprintf(stdout, "Required sparsity %.3f", params.sparsity);
+    if(params.compwise)
+      fprintf(stdout, " using (component-wise) Kullback-Leibler based decimation\n");
+    else
+      fprintf(stdout, " using (block-wise) Kullback-Leibler based decimation\n");
   }
   if(params.regJ > 0)
     fprintf(stdout, "L1 regularization on couplings: lambda %.1e\n", params.regJ);
@@ -108,22 +112,19 @@ int main(int argc, char ** argv) {
   long in_time = time(NULL);
   bool conv = false;
   Errs errs;
-  while(!conv && iter < params.maxiter) {
+  while(!conv && iter < params.maxiter && model_sp < params.sparsity) {
     bool print_aux = false;
     model.init_statistics();
     model.sample();
-    double lrav=model.update_parameters(fm,sm,iter);
+    double lrav = model.update_parameters(fm,sm,iter);
     model.compute_errors(fm,sm,cov,errs);
-    if(model_sp < params.sparsity && iter % 10 == 0) {
-      fprintf(stdout, "Decimating..");
-      decimate(ceil((n*10)/(params.maxiter*0.5)));
-    } else if(params.compwise && errs.errnorm<params.conv) {
+    if(params.compwise && errs.errnorm<params.conv) {
       fprintf(stdout,"Decimating..");
       int aux = ceil( (1.0 - model_sp) * n / 100);
       decimate_compwise(aux,iter);
       print_aux = true;
     }
-    if(errs.errnorm<params.conv && params.sparsity == 0 && !params.compwise)
+    if(errs.errnorm<params.conv && !params.compwise)
       conv = true;
     if(model_sp >= params.sparsity && params.sparsity > 0 && errs.errnorm<params.conv)
       conv = true;

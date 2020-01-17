@@ -188,7 +188,7 @@ class Params {
 				fprintf(stdout, "-l : Threshold for computing weigts, default: %.1f\n", w_th);
 				fprintf(stdout, "-g : L1 Regularization (J parameters), default :%.3e\n", regJ);
 				fprintf(stdout, "-k : Label used in output files\n");
-				fprintf(stdout, "-x : Required sparsity. (old implementation) If this value is larger than zero, the algorithm sequentially prunes the J(i,j,a,b)\n");
+				fprintf(stdout, "-x : Required sparsity. Add -B for block-wise decimation or -W for component-wise decimation\n");
 				fprintf(stdout, "-B : (flag) A block-wise decimation is applied to the couplings using sDKL as a criterion. Default: false\n");
 				fprintf(stdout, "-W : (flag) A component-wise decimation is applied to the couplings using sDKL as a criterion. Default: false\n");
 				fprintf(stdout, "-R : (flag) Zero J,H initialization\n");
