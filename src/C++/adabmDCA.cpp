@@ -112,7 +112,7 @@ int main(int argc, char ** argv) {
   long in_time = time(NULL);
   bool conv = false;
   Errs errs;
-  while(!conv && iter < params.maxiter && model_sp < params.sparsity) {
+  while(!conv && iter < params.maxiter && model_sp <= params.sparsity) {
     bool print_aux = false;
     model.init_statistics();
     model.sample();
@@ -371,7 +371,7 @@ int decimate_compwise(int c, int iter)
 	FILE *fileout;
 	double auxsm;
 	char filename_aux[1000];
-	sprintf(filename_aux, "sDKL_couplings_iter_%i.dat", iter);
+	sprintf(filename_aux, "sDKL_couplings_%s_iter_%i.dat", params.label, iter);
 	fileout = fopen(filename_aux, "w");
 	maxsdkl = -1e50;
 	printf("n terms: %d\n",c);
