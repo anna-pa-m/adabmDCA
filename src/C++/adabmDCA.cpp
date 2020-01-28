@@ -38,6 +38,7 @@ double model_sp;
 // list of functions
 int alloc_structures();
 int decimate(int c);
+int read_freq(char *filename, char *ctype, int &M, int &L, int &q);
 int decimate_compwise(int c, int iter);
 
 
@@ -48,7 +49,6 @@ int main(int argc, char ** argv) {
   fprintf(stdout, "Boltzmann machine for DCA model\n");
   srand(params.seed ? params.seed : time(NULL));
   q=print_alphabet(params.ctype);
-  msa=read_msa(params.file_msa,params.ctype,M,L,q);
   if(!params.Twait)
     params.Twait = 10*L;
   if(!params.Teq)
@@ -89,9 +89,14 @@ int main(int argc, char ** argv) {
     fprintf(stdout, "L1 regularization on couplings: lambda %.1e\n", params.regJ);
   if(params.pseudocount)
     fprintf(stdout, "Using pseudo-count: %1.e\n", params.pseudocount);
-  w=compute_w(params.file_w,params.label,params.w_th,msa,M,L);
-  alloc_structures();
-  Meff=compute_empirical_statistics(fm,sm,cov,params.pseudocount,msa,w,M,L,q);
+   if(params.file_msa) {
+    msa=read_msa(params.file_msa,params.ctype,M,L,q);
+    w=compute_w(params.file_w,params.label,params.w_th,msa,M,L);
+    alloc_structures();
+    Meff=compute_empirical_statistics(fm,sm,cov,params.pseudocount,msa,w,M,L,q);
+  } else if(params.file_freq) {
+    read_freq(params.file_freq,params.ctype,M,L,q);
+  }
   model.resize(q,L,M);
   model.initialize_parameters(fm);
   int n = model.initialize_model(cov);
@@ -176,6 +181,80 @@ int main(int argc, char ** argv) {
 
 
 ///////FZ: BLOCK OF ROUTINES THAT SHOULD BE MOVED SOMEWHERE //////////////////////////////////////////////////////////////////////
+
+int read_freq(char *filename, char *ctype, int &M, int &L, int &q) {
+
+	FILE * filefreq;
+	int i, j, a, b;
+	char ch, cha,chb, t;
+	char tmp[1024];
+	double aux;
+
+	if(!filename || !(filefreq = fopen(filename, "r"))) {
+		fprintf(stderr, "I couldn't open %s\n", filename);
+		exit(EXIT_FAILURE);
+	} else {
+	  fprintf(stdout, "Reading frequencies from %s\n", filename);
+	}
+	L = 0;
+	while(!feof(filefreq) && fgets(tmp, 1024, filefreq) && sscanf(tmp, "%c ", &t) == 1) {
+	  switch (t) {
+	    case 'm':
+	      sscanf(tmp, "m %d %c %lf \n", &i, &ch, &aux);
+	      if(i+1 > L)
+		L = i+1;
+	      break;
+	  }
+	}
+        fprintf(stdout, "L = %i\n", L);
+	alloc_structures();
+	rewind(filefreq);
+	while (!feof(filefreq) && fgets(tmp, 1024, filefreq) && sscanf(tmp, "%c ", &t) == 1) {
+	  switch(t) {
+	    case 's':
+	      sscanf(tmp, "s %d %d %c %c %lf \n", &i, &j, &cha, &chb, &aux);  
+	      if(!strcmp(ctype, "a")) {
+		a = convert_char_amino(cha); 
+		b = convert_char_amino(chb);
+	      } else if(!strcmp(ctype, "n")) {
+		a = convert_char_nbase(cha);
+		b = convert_char_nbase(chb);
+	      } else if(!strcmp(ctype, "i")) {
+		a = convert_char_ising(cha);
+		b = convert_char_ising(chb);
+	      } else if(!strcmp(ctype, "e")) {
+		a = convert_char_epi(cha);
+		b = convert_char_epi(chb);
+	      }
+//	      printf("%d %d %d %d %lf\n", i,a,j,b,aux);
+	      if(i != j) {
+		sm[i*q+a][j*q+b] = aux;
+		sm[j*q+b][i*q+a] = aux;
+	      }
+	      break;
+	    case 'm':
+	      sscanf(tmp, "m %d %c %lf \n", &i, &ch, &aux);
+	      if(!strcmp(ctype, "a"))  
+	       a = convert_char_amino(ch);
+	      else if(!strcmp(ctype, "n")) 
+		a = convert_char_nbase(ch);
+	      else if(!strcmp(ctype, "i")) 
+		a = convert_char_ising(ch);
+	      else if(!strcmp(ctype, "e")) 
+		a = convert_char_epi(ch);
+//		printf("%d %d %lf\n", i,a,aux);
+	        fm[i*q+a] = aux;
+	      break;
+	    }
+      }
+
+      for(i = 0; i < q*L; i++) 
+	for(j = 0; j < q*L; j++) 
+	  cov[i][j] = sm[i][j] - fm[i]*fm[j];
+
+      return 0;
+
+}
 
 int alloc_structures() {
   // one-point frequencies and fields

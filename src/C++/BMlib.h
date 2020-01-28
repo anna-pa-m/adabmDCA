@@ -18,12 +18,13 @@ using namespace std;
 
 class Params {
  public:
-  char * file_msa, * file_w , * file_params, init, * label, * ctype, * file_3points, *file_cc, *file_samples, *file_en;
+  char * file_msa, * file_freq, * file_w , * file_params, init, * label, * ctype, * file_3points, *file_cc, *file_samples, *file_en;
   bool Metropolis, Gibbs, rmgauge, dgap, gapnn, phmm, blockwise, compwise;
   double sparsity, rho, w_th,  regJ, lrateJ, lrateh, conv, pseudocount;
   int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, Nmc_config, Twait, maxiter;
   Params() {
     file_msa = 0;
+    file_freq = 0;
     file_w = 0;
     file_params =0;
     init = 'R';
@@ -62,7 +63,7 @@ class Params {
   }
   int read_params (int & argc, char ** argv) {
     int c;
-    while ((c = getopt(argc, argv, "y:b:f:w:l:u:v:s:n:m:p:j:t:o:i:a:c:z:g:e:k:x:S:d:T:C:MGIRAhDNE:HBW")) != -1) {
+    while ((c = getopt(argc, argv, "y:b:f:w:l:u:v:s:n:m:p:j:t:o:i:a:c:z:g:e:k:x:S:d:T:C:MGIRAhDNE:HBWq:")) != -1) {
 		switch (c) {
 			case 'b':
 				ctype = optarg;
@@ -102,6 +103,9 @@ class Params {
 				break;
 			case 'f':
 				file_msa = optarg;
+				break;
+			case 'q':
+				file_freq = optarg;
 				break;
 			case 'w':
 				file_w = optarg;
@@ -406,8 +410,7 @@ int convert_char_epi(char a) {
 	return i;
 }
 
-int convert_char_ising(char a)
-{
+int convert_char_ising(char a){
 	int i;
 	switch(a) {
 		case 'A':
