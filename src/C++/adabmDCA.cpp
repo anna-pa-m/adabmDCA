@@ -228,8 +228,8 @@ int read_freq(char *filename, char *ctype, int &M, int &L, int &q) {
 	      }
 //	      printf("%d %d %d %d %lf\n", i,a,j,b,aux);
 	      if(i != j) {
-		sm[i*q+a][j*q+b] = (aux == 0) ? params.pseudocount : aux;
-		sm[j*q+b][i*q+a] = (aux == 0) ? params.pseudocount : aux;
+		sm[i*q+a][j*q+b] = (aux == 0) ? params.pseudocount : aux + params.pseudocount;
+		sm[j*q+b][i*q+a] = (aux == 0) ? params.pseudocount : aux + params.pseudocount;
 	      }
 	      break;
 	    case 'm':
@@ -243,7 +243,7 @@ int read_freq(char *filename, char *ctype, int &M, int &L, int &q) {
 	      else if(!strcmp(ctype, "e")) 
 		a = convert_char_epi(ch);
 //		printf("%d %d %lf\n", i,a,aux);
-	        fm[i*q+a] = (aux == 0) ? params.pseudocount : aux;
+	        fm[i*q+a] = (aux == 0) ? params.pseudocount : aux + params.pseudocount;
 	      break;
 	    }
       }
@@ -464,7 +464,6 @@ int decimate_compwise(int c, int iter)
 		neff = (L*(L-1)*q*q)/2 - (L*(L-1)*(2*q-1))/2 + L;
 		n = (L*(L-1)*q*q)/2;
 	}
-
 	for(k = 0; k < n; k++) {
 		tmp_idx[k] = k;
 		sorted_struct[k] = 0.0;
