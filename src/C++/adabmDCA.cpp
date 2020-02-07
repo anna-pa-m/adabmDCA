@@ -228,8 +228,8 @@ int read_freq(char *filename, char *ctype, int &M, int &L, int &q) {
 	      }
 //	      printf("%d %d %d %d %lf\n", i,a,j,b,aux);
 	      if(i != j) {
-		sm[i*q+a][j*q+b] = aux;
-		sm[j*q+b][i*q+a] = aux;
+		sm[i*q+a][j*q+b] = (aux == 0) ? params.pseudocount : aux;
+		sm[j*q+b][i*q+a] = (aux == 0) ? params.pseudocount : aux;
 	      }
 	      break;
 	    case 'm':
@@ -243,7 +243,7 @@ int read_freq(char *filename, char *ctype, int &M, int &L, int &q) {
 	      else if(!strcmp(ctype, "e")) 
 		a = convert_char_epi(ch);
 //		printf("%d %d %lf\n", i,a,aux);
-	        fm[i*q+a] = aux;
+	        fm[i*q+a] = (aux == 0) ? params.pseudocount : aux;
 	      break;
 	    }
       }
