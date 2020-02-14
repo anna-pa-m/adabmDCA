@@ -17,28 +17,12 @@ using namespace std;
 // structures and important parameters
 Params params;
 Model model(0,0,0,&params);
-int ** msa;
-double * w;
-int ** idx;
-int * tmp_idx;
-double * sorted_struct;
-double * fm;
-double ** sm;
-double ** cov;
-double * tm;
-int ** tm_index;
 
 
-
-int q = 21, L, M;
-double Meff;
-double maxsdkl;
 double model_sp;
 
 // list of functions
-int alloc_structures();
 int decimate(int c);
-int read_freq(char *filename, char *ctype, int &M, int &L, int &q);
 int decimate_compwise(int c, int iter);
 
 
@@ -89,13 +73,13 @@ int main(int argc, char ** argv) {
     fprintf(stdout, "L1 regularization on couplings: lambda %.1e\n", params.regJ);
   if(params.pseudocount)
     fprintf(stdout, "Using pseudo-count: %1.e\n", params.pseudocount);
-   if(params.file_msa) {
+  if(params.file_msa) {
     msa=read_msa(params.file_msa,params.ctype,M,L,q);
     w=compute_w(params.file_w,params.label,params.w_th,msa,M,L);
-    alloc_structures();
+    alloc_structures(params);
     Meff=compute_empirical_statistics(fm,sm,cov,params.pseudocount,msa,w,M,L,q);
   } else if(params.file_freq) {
-    read_freq(params.file_freq,params.ctype,M,L,q);
+    read_freq(fm,sm,cov,params,M,L,q);
   }
   model.resize(q,L,M);
   model.initialize_parameters(fm);
@@ -121,7 +105,7 @@ int main(int argc, char ** argv) {
     bool print_aux = false;
     model.init_statistics();
     model.sample();
-    double lrav = model.update_parameters(fm,sm,iter);
+    double lrav=model.update_parameters(fm,sm,iter);
     model.compute_errors(fm,sm,cov,errs);
     if(params.compwise && errs.errnorm<params.conv) {
       fprintf(stdout,"Decimating..");
@@ -129,10 +113,6 @@ int main(int argc, char ** argv) {
       decimate_compwise(aux,iter);
       print_aux = true;
     }
-    if(errs.errnorm<params.conv && !params.compwise)
-      conv = true;
-    if(model_sp >= params.sparsity && params.sparsity > 0 && errs.errnorm<params.conv)
-      conv = true;
     if(iter % params.nprint == 0) {
       fprintf(stdout, "it: %i el_time: %li N: %i Teq: %i Twait: %i merr_fm: %.1e merr_sm: %.1e averr_fm: %.1e averr_sm: %.1e cov_err: %.1e corr: %.2f sp: %.1e lrav: %.1e\n", iter, time(NULL)-in_time, params.Nmc_config * params.Nmc_starts, params.Teq, params.Twait, errs.merrh, errs.merrJ, errs.averrh, errs.averrJ, errs.errnorm, model.pearson(cov), model_sp, lrav);
       fflush(stdout);
@@ -151,7 +131,18 @@ int main(int argc, char ** argv) {
 	compute_third_order_correlations();
       print_statistics(sec, first, third);
     }
+    if(errs.errnorm<params.conv && !params.compwise) {
+      conv = true;
+      fprintf(stdout,"Reached convergence of error, end of learning\n");
+    }
+    if(model_sp >= params.sparsity && params.sparsity > 0 && errs.errnorm<params.conv) {
+      conv = true;
+      fprintf(stdout,"Reached convergence of error and desired sparsity, end of learning\n");
+    }
     iter++;
+    if (iter >= params.maxiter) {
+      fprintf(stdout,"Reached maximum number of iterations, end of learning\n");
+    }
   }
   /* END ITERATION LOOP */
 
@@ -182,116 +173,6 @@ int main(int argc, char ** argv) {
 
 ///////FZ: BLOCK OF ROUTINES THAT SHOULD BE MOVED SOMEWHERE //////////////////////////////////////////////////////////////////////
 
-int read_freq(char *filename, char *ctype, int &M, int &L, int &q) {
-
-	FILE * filefreq;
-	int i, j, a, b;
-	char ch, cha,chb, t;
-	char tmp[1024];
-	double aux;
-
-	if(!filename || !(filefreq = fopen(filename, "r"))) {
-		fprintf(stderr, "I couldn't open %s\n", filename);
-		exit(EXIT_FAILURE);
-	} else {
-	  fprintf(stdout, "Reading frequencies from %s\n", filename);
-	}
-	L = 0;
-	while(!feof(filefreq) && fgets(tmp, 1024, filefreq) && sscanf(tmp, "%c ", &t) == 1) {
-	  switch (t) {
-	    case 'm':
-	      sscanf(tmp, "m %d %c %lf \n", &i, &ch, &aux);
-	      if(i+1 > L)
-		L = i+1;
-	      break;
-	  }
-	}
-        fprintf(stdout, "L = %i\n", L);
-	alloc_structures();
-	rewind(filefreq);
-	while (!feof(filefreq) && fgets(tmp, 1024, filefreq) && sscanf(tmp, "%c ", &t) == 1) {
-	  switch(t) {
-	    case 's':
-	      sscanf(tmp, "s %d %d %c %c %lf \n", &i, &j, &cha, &chb, &aux);  
-	      if(!strcmp(ctype, "a")) {
-		a = convert_char_amino(cha); 
-		b = convert_char_amino(chb);
-	      } else if(!strcmp(ctype, "n")) {
-		a = convert_char_nbase(cha);
-		b = convert_char_nbase(chb);
-	      } else if(!strcmp(ctype, "i")) {
-		a = convert_char_ising(cha);
-		b = convert_char_ising(chb);
-	      } else if(!strcmp(ctype, "e")) {
-		a = convert_char_epi(cha);
-		b = convert_char_epi(chb);
-	      }
-//	      printf("%d %d %d %d %lf\n", i,a,j,b,aux);
-	      if(i != j) {
-		sm[i*q+a][j*q+b] = (aux == 0) ? params.pseudocount : aux + params.pseudocount;
-		sm[j*q+b][i*q+a] = (aux == 0) ? params.pseudocount : aux + params.pseudocount;
-	      }
-	      break;
-	    case 'm':
-	      sscanf(tmp, "m %d %c %lf \n", &i, &ch, &aux);
-	      if(!strcmp(ctype, "a"))  
-	       a = convert_char_amino(ch);
-	      else if(!strcmp(ctype, "n")) 
-		a = convert_char_nbase(ch);
-	      else if(!strcmp(ctype, "i")) 
-		a = convert_char_ising(ch);
-	      else if(!strcmp(ctype, "e")) 
-		a = convert_char_epi(ch);
-//		printf("%d %d %lf\n", i,a,aux);
-	        fm[i*q+a] = (aux == 0) ? params.pseudocount : aux + params.pseudocount;
-	      break;
-	    }
-      }
-
-      for(i = 0; i < q*L; i++) 
-	for(j = 0; j < q*L; j++) 
-	  cov[i][j] = sm[i][j] - fm[i]*fm[j];
-
-      return 0;
-
-}
-
-int alloc_structures() {
-  // one-point frequencies and fields
-  fm = (double *)calloc(L*q, sizeof(double));
-  // two-point frequencies and fields
-  sm = (double **)calloc(L*q, sizeof(double *));
-  cov = (double **)calloc(L*q, sizeof(double *));
-  for(int i = 0; i < L*q; i++) {
-    sm[i] = (double *)calloc(L*q, sizeof(double));
-    cov[i] = (double *)calloc(L*q, sizeof(double));
-  }
-  // variables for sorting
-  if(params.sparsity > 0 || params.compwise || params.blockwise) {
-    int n = L*(L-1)*q*q/2;
-    idx = (int **)calloc(n, sizeof(int *));
-    sorted_struct = (double *)calloc(n, sizeof(double));
-    tmp_idx = (int *)calloc(n, sizeof(int));
-    for(int i = 0; i < n;i++)
-      idx[i] = (int *)calloc(4, sizeof(int));
-    int k = 0;
-    for(int i = 0; i < L; i++) {
-      for(int j = i+1; j < L; j++) {
-	for(int a = 0; a < q; a++) {
-	  for(int b = 0; b < q; b++) {
-	    idx[k][0] = i;
-	    idx[k][1] = j;
-	    idx[k][2] = a;
-	    idx[k][3] = b;
-	    sorted_struct[k] = 0.0;
-	    k += 1;
-	  }
-	}
-      }
-    }
-  }
-  return 0;
-}
 
 int load_third_order_indices() {
   if(params.file_3points) {
@@ -436,11 +317,6 @@ int print_statistics(char *file_sm, char *file_fm, char *file_tm) {
 
 
 
-
-
-
-
-
 int decimate_compwise(int c, int iter)
 {
 	int k, i, j, a, b;
@@ -452,7 +328,7 @@ int decimate_compwise(int c, int iter)
 	char filename_aux[1000];
 	sprintf(filename_aux, "sDKL_couplings_%s_iter_%i.dat", params.label, iter);
 	fileout = fopen(filename_aux, "w");
-	maxsdkl = -1e50;
+	double maxsdkl = -1e50;
 	printf("n terms: %d\n",c);
 	if(params.dgap)
 		n = (L*(L-1)*(q-1)*(q-1))/2;
@@ -464,6 +340,7 @@ int decimate_compwise(int c, int iter)
 		neff = (L*(L-1)*q*q)/2 - (L*(L-1)*(2*q-1))/2 + L;
 		n = (L*(L-1)*q*q)/2;
 	}
+
 	for(k = 0; k < n; k++) {
 		tmp_idx[k] = k;
 		sorted_struct[k] = 0.0;

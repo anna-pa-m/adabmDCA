@@ -49,10 +49,12 @@ class Model {
   vector< vector<double> > J, decJ, GJ;
   bool Gibbs;
   Params * params;
+  double alpha, acc;  // for FIRE
+  int counter;   // for FIRE
 
  Model(int _q, int _L, int _M, Params * _params):
-  q(_q),L(_L),M(_M),h(L*q,0),J(L*q,h),decJ(L*q,h),Gibbs(false),params(_params) {
-    if (params->learn_strat == 1 || params->learn_strat == 2) {
+  q(_q),L(_L),M(_M),h(L*q,0),J(L*q,h),decJ(L*q,h),Gibbs(false),params(_params),alpha(0.1),acc(1),counter(0) {
+    if (params->learn_strat == 1 || params->learn_strat == 2 || params->learn_strat == 5) {
       Gh.clear();
       Gh.resize(L*q,0);
       GJ.clear();
@@ -72,7 +74,7 @@ class Model {
     J.resize(L*q,h);
     decJ.clear();
     decJ.resize(L*q,h);
-    if (params->learn_strat == 1 || params->learn_strat == 2) {
+    if (params->learn_strat == 1 || params->learn_strat == 2 || params->learn_strat == 5) {
       Gh.clear();
       Gh.resize(L*q,0);
       GJ.clear();
@@ -543,49 +545,105 @@ class Model {
   /******************** METHODS FOR STATISTICS ***********************************************************/
 
   double update_parameters(double * fm, double ** sm, int iter) {
-    double lrav=0;
-    int n=0;
-    for(int i = 0; i < L; i++) {
-      for(int a = 0; a < q; a++) {
-	double gradh = fm[i*q+a] - fm_s[i*q+a];	
-	double lrh=params->lrateh;
-	if (params->learn_strat == 1) {
-	  Gh[i*q+a]+=gradh*gradh;
-	  lrh /= sqrt(Gh[i*q+a] + 1e-12);
-	} else if (params->learn_strat == 2) {
-	  Gh[i*q+a] = params->rho * Gh[i*q+a] + (1.0 - params->rho)*gradh*gradh;
-	  lrh /= sqrt(Gh[i*q+a] + 1e-12);
-	} else if(params->learn_strat == 3) {
-	  lrh /= (1.0 + iter/params->tau);
-	}
-	h[i*q+a] += lrh * gradh;
-	lrav+=lrh;
-	n++;
-	for(int j = i+1; j < L; j++) {
-	  for(int b = 0; b <q; b++) {
-	    double gradJ=sm[i*q+a][j*q+b] - sm_s[i*q+a][j*q+b] - params->regJ * ( (J[i*q +a][j*q + b] > 0)  - (J[i*q +a][j*q+b] < 0) );
-	    double lrJ=params->lrateJ;
-	    if (params->learn_strat == 1) {
-	      GJ[i*q+a][j*q+b]+=gradJ*gradJ;
-	      lrJ /= sqrt(GJ[i*q+a][j*q+b] + 1e-12);
-	    } else if (params->learn_strat == 2) {
-	      GJ[i*q+a][j*q+b] = params->rho * GJ[i*q+a][j*q+b] + (1.0 - params->rho)*gradJ*gradJ;
-	      lrJ /= sqrt(GJ[i*q+a][j*q+b] + 1e-12);
-	    } else if(params->learn_strat == 3) {
-	      lrJ /= (1.0 + iter/params->tau);
+    if (params->learn_strat != 5) {
+      double lrav=0;
+      int n=0;
+      for(int i = 0; i < L; i++) {
+	for(int a = 0; a < q; a++) {
+	  double gradh = fm[i*q+a] - fm_s[i*q+a];	
+	  double lrh=params->lrateh;
+	  if (params->learn_strat == 1) {
+	    Gh[i*q+a]+=gradh*gradh;
+	    lrh /= sqrt(Gh[i*q+a] + 1e-12);
+	  } else if (params->learn_strat == 2) {
+	    Gh[i*q+a] = params->rho * Gh[i*q+a] + (1.0 - params->rho)*gradh*gradh;
+	    lrh /= sqrt(Gh[i*q+a] + 1e-12);
+	  } else if(params->learn_strat == 3) {
+	    lrh /= (1.0 + (double)iter/params->tau);
+	  }
+	  h[i*q+a] += lrh * gradh;
+	  lrav+=lrh;
+	  n++;
+	  for(int j = i+1; j < L; j++) {
+	    for(int b = 0; b <q; b++) {
+	      double gradJ=sm[i*q+a][j*q+b] - sm_s[i*q+a][j*q+b] - params->regJ * ( (J[i*q +a][j*q + b] > 0)  - (J[i*q +a][j*q+b] < 0) );
+	      double lrJ=params->lrateJ;
+	      if (params->learn_strat == 1) {
+		GJ[i*q+a][j*q+b]+=gradJ*gradJ;
+		lrJ /= sqrt(GJ[i*q+a][j*q+b] + 1e-12);
+	      } else if (params->learn_strat == 2) {
+		GJ[i*q+a][j*q+b] = params->rho * GJ[i*q+a][j*q+b] + (1.0 - params->rho)*gradJ*gradJ;
+		lrJ /= sqrt(GJ[i*q+a][j*q+b] + 1e-12);
+	      } else if(params->learn_strat == 3) {
+		lrJ /= (1.0 + (double)iter/params->tau);
+	      }
+	      J[i*q + a][j*q + b] += lrJ * decJ[i*q + a][j*q + b] * gradJ;
+	      J[j*q + b][i*q + a] = J[i*q + a][j*q + b];
+	      lrav+=lrJ;
+	      n++;
 	    }
-	    J[i*q + a][j*q + b] += lrJ * decJ[i*q + a][j*q + b] * gradJ;
-	    J[j*q + b][i*q + a] = J[i*q + a][j*q + b];
-	    lrav+=lrJ;
-	    n++;
+	  }
+	}
+      } 
+      return lrav/n;
+    } else {
+      double P=0;
+      double modF=0;
+      double modv=0;
+      for(int i = 0; i < L; i++) {
+	for(int a = 0; a < q; a++) {
+	  double gradh = fm[i*q+a] - fm_s[i*q+a];
+	  h[i*q+a] += params->lrateh * acc * Gh[i*q+a];
+	  Gh[i*q+a] += params->lrateh * acc * gradh;
+	  P+=gradh*Gh[i*q+a];
+	  modF+=gradh*gradh;
+	  modv+=Gh[i*q+a]*Gh[i*q+a];
+	  for(int j = i+1; j < L; j++) {
+	    for(int b = 0; b <q; b++) {
+	      double gradJ=sm[i*q+a][j*q+b] - sm_s[i*q+a][j*q+b];
+	      J[i*q + a][j*q + b] += params->lrateJ * acc * decJ[i*q + a][j*q + b] * GJ[i*q + a][j*q + b];
+	      J[j*q + b][i*q + a] = J[i*q + a][j*q + b];
+	      GJ[i*q + a][j*q + b] += params->lrateJ * acc * decJ[i*q + a][j*q + b] * gradJ;
+	      GJ[j*q + b][i*q + a] = GJ[i*q + a][j*q + b];
+	      P+=gradJ*GJ[i*q + a][j*q + b];
+	      modF+=gradJ*gradJ;
+	      modv+=GJ[i*q+a][j*q + b]*GJ[i*q+a][j*q + b];
+	    }
+	  }
+	}      
+      }
+      modF=sqrt(modF);
+      modv=sqrt(modv);
+      for(int i = 0; i < L; i++) {
+	for(int a = 0; a < q; a++) {
+	  Gh[i*q+a] = (1-alpha)*Gh[i*q+a] + alpha*(fm[i*q+a] - fm_s[i*q+a])/modF*modv;
+	  for(int j = i+1; j < L; j++) {
+	    for(int b = 0; b <q; b++) {
+	      GJ[i*q+a][j*q + b] = (1-alpha)*GJ[i*q+a][j*q + b] + alpha*(sm[i*q+a][j*q+b] - sm_s[i*q+a][j*q+b])/modF*modv;
+	    }
 	  }
 	}
       }
-    } 
-    return lrav/n;
+      if (P>=0) {
+	counter++;
+	if (counter>5) {
+	  acc = min(acc*1.1,10);
+	  alpha*=0.99;
+	}
+      } else {
+	acc=0.5*acc;
+	alpha=0.1;
+	fill(Gh.begin(), Gh.end(), 0);
+	fill(GJ.begin(), GJ.end(), Gh);
+	counter=0;
+      }
+      cout<<"FIRE step - acc: "<<acc<<" alpha: "<<alpha<<" counter: "<<counter<<" P: "<<P/modF/modv<<endl;
+      return acc*params->lrateh;
+    }
   }
 
 
+  
 };
 
 

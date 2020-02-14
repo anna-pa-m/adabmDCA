@@ -15,6 +15,22 @@ using namespace std;
 #ifndef BMlib
 #define BMlib
 
+///FZ: TO BE ENCAPSULATED IN A CLASS
+int q = 21, L, M;
+double Meff;
+int ** msa;
+double * w;
+int ** idx;
+int * tmp_idx;
+double * sorted_struct;
+double * fm;
+double ** sm;
+double ** cov;
+double * tm;
+int ** tm_index;
+//END
+
+
 
 class Params {
  public:
@@ -24,11 +40,11 @@ class Params {
   int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, Nmc_config, Twait, maxiter;
   Params() {
     file_msa = 0;
-    file_freq = 0;
     file_w = 0;
+    file_freq = 0;
     file_params =0;
     init = 'R';
-    label = 0;
+    label = (char *) "nolabel";
     ctype = (char *) "a";
     file_3points =0;
     file_cc = 0;
@@ -104,9 +120,9 @@ class Params {
 			case 'f':
 				file_msa = optarg;
 				break;
-			case 'q':
-				file_freq = optarg;
-				break;
+		        case 'q':
+ 				file_freq = optarg;
+ 				break;
 			case 'w':
 				file_w = optarg;
 				break;
@@ -210,16 +226,17 @@ class Params {
 				fprintf(stdout, "-p : (optional file) Initial parameters J, h, default: random [-1e-3, 1e-3]\n");
 				fprintf(stdout, "-c : Convergence tolerance, default: %.3e\n", conv);
 				fprintf(stdout, "-e : Initial MC equilibration time, default: 20 * L\n");
-				fprintf(stdout, "-t : Initical sampling time of MC algorithm, default: 10 * L\n");
+				fprintf(stdout, "-t : Initial sampling time of MC algorithm, default: 10 * L\n");
 				fprintf(stdout, "-i : Maximum number of iterations, default: %d\n", maxiter);
 				fprintf(stdout, "-z : Print output every x iterations, default: %d\n", nprint);
 				fprintf(stdout, "-m : Print Frobenius norms and parameters every x iterations, default: %d\n", nprintfile);
 				fprintf(stdout, "-u : Learning rate for couplings, default: %.e\n", lrateJ);
 				fprintf(stdout, "-v : Learning rate for fields, default: %.e\n", lrateh);
-				fprintf(stdout, "-a : Learning strategy.\n \t0: standard gradient descent\n \t1: adagrad\n \t2. RMSprop\n \t3. search then converge\n \t4. adam\n \tDefault: %d\n", learn_strat);
-				return(EXIT_FAILURE);
+				fprintf(stdout, "-a : Learning strategy.\n \t0: standard gradient descent\n \t1: adagrad\n \t2. RMSprop\n \t3. search then converge\n \t4. adam (currently not implemented)\n \t5. FIRE\n \tDefault: %d\n", learn_strat);
+				exit(0);
 			default:
-				return(EXIT_FAILURE);
+			        fprintf(stdout, "Incorrect input. Run with -h to get a list of inputs.\n");
+				exit(1);
 		}
 	}
 
@@ -451,6 +468,46 @@ int print_alphabet(char * ctype) {
   return q;
 }
 
+
+
+int alloc_structures(Params & params) {
+  // one-point frequencies and fields
+  fm = (double *)calloc(L*q, sizeof(double));
+  // two-point frequencies and fields
+  sm = (double **)calloc(L*q, sizeof(double *));
+  cov = (double **)calloc(L*q, sizeof(double *));
+  for(int i = 0; i < L*q; i++) {
+    sm[i] = (double *)calloc(L*q, sizeof(double));
+    cov[i] = (double *)calloc(L*q, sizeof(double));
+  }
+  // variables for sorting
+  if(params.sparsity > 0 || params.compwise || params.blockwise) {
+    int n = L*(L-1)*q*q/2;
+    idx = (int **)calloc(n, sizeof(int *));
+    sorted_struct = (double *)calloc(n, sizeof(double));
+    tmp_idx = (int *)calloc(n, sizeof(int));
+    for(int i = 0; i < n;i++)
+      idx[i] = (int *)calloc(4, sizeof(int));
+    int k = 0;
+    for(int i = 0; i < L; i++) {
+      for(int j = i+1; j < L; j++) {
+	for(int a = 0; a < q; a++) {
+	  for(int b = 0; b < q; b++) {
+	    idx[k][0] = i;
+	    idx[k][1] = j;
+	    idx[k][2] = a;
+	    idx[k][3] = b;
+	    sorted_struct[k] = 0.0;
+	    k += 1;
+	  }
+	}
+      }
+    }
+  }
+  return 0;
+}
+
+
 int ** read_msa(char * filename, char * ctype, int & M, int & L, int & q) {
 	FILE * filemsa;
 	char ch;
@@ -513,6 +570,81 @@ int ** read_msa(char * filename, char * ctype, int & M, int & L, int & q) {
 	fclose(filemsa);
 	return msa;
 }
+
+int read_freq(double * fm, double ** sm, double ** cov, Params & params,int &M, int &L, int &q) {    /// FZ: TO BE CHECKED
+
+	FILE * filefreq;
+	int i, j, a, b;
+	char ch, cha,chb, t;
+	char tmp[1024];
+	double aux;
+
+	if(!params.file_freq || !(filefreq = fopen(params.file_freq, "r"))) {
+		fprintf(stderr, "I couldn't open %s\n", params.file_freq);
+		exit(EXIT_FAILURE);
+	} else {
+	  fprintf(stdout, "Reading frequencies from %s\n", params.file_freq);
+	}
+	L = 0;
+	while(!feof(filefreq) && fgets(tmp, 1024, filefreq) && sscanf(tmp, "%c ", &t) == 1) {
+	  switch (t) {
+	    case 'm':
+	      sscanf(tmp, "m %d %c %lf \n", &i, &ch, &aux);
+	      if(i+1 > L)
+		L = i+1;
+	      break;
+	  }
+	}
+        fprintf(stdout, "L = %i\n", L);
+	alloc_structures(params);
+	rewind(filefreq);
+	while (!feof(filefreq) && fgets(tmp, 1024, filefreq) && sscanf(tmp, "%c ", &t) == 1) {
+	  switch(t) {
+	    case 's':
+	      sscanf(tmp, "s %d %d %c %c %lf \n", &i, &j, &cha, &chb, &aux);  
+	      if(!strcmp(params.ctype, "a")) {
+		a = convert_char_amino(cha); 
+		b = convert_char_amino(chb);
+	      } else if(!strcmp(params.ctype, "n")) {
+		a = convert_char_nbase(cha);
+		b = convert_char_nbase(chb);
+	      } else if(!strcmp(params.ctype, "i")) {
+		a = convert_char_ising(cha);
+		b = convert_char_ising(chb);
+	      } else if(!strcmp(params.ctype, "e")) {
+		a = convert_char_epi(cha);
+		b = convert_char_epi(chb);
+	      }
+//	      printf("%d %d %d %d %lf\n", i,a,j,b,aux);
+	      if(i != j) {
+		sm[i*q+a][j*q+b] = aux + params.pseudocount;
+		sm[j*q+b][i*q+a] = aux + params.pseudocount;
+	      }
+	      break;
+	    case 'm':
+	      sscanf(tmp, "m %d %c %lf \n", &i, &ch, &aux);
+	      if(!strcmp(params.ctype, "a"))  
+	       a = convert_char_amino(ch);
+	      else if(!strcmp(params.ctype, "n")) 
+		a = convert_char_nbase(ch);
+	      else if(!strcmp(params.ctype, "i")) 
+		a = convert_char_ising(ch);
+	      else if(!strcmp(params.ctype, "e")) 
+		a = convert_char_epi(ch);
+//		printf("%d %d %lf\n", i,a,aux);
+	        fm[i*q+a] = aux + params.pseudocount;
+	      break;
+	    }
+      }
+
+      for(i = 0; i < q*L; i++) 
+	for(j = 0; j < q*L; j++) 
+	  cov[i][j] = sm[i][j] - fm[i]*fm[j];
+
+      return 0;
+
+}
+
 
 double * compute_w(char * filename, char * label, double w_th, int ** msa, int & M, int & L) {
         double * w;
