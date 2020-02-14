@@ -33,10 +33,6 @@ int main(int argc, char ** argv) {
   fprintf(stdout, "Boltzmann machine for DCA model\n");
   srand(params.seed ? params.seed : time(NULL));
   q=print_alphabet(params.ctype);
-  if(!params.Twait)
-    params.Twait = 10*L;
-  if(!params.Teq)
-    params.Teq = 20*L;
   if(params.Metropolis)
     fprintf(stdout, "Performing Metropolis-Hastings MC.\nInitial sampling time: %d\nInitial equilibration time: %d\nUsing %d seeds and tot. number of points %d\n", params.Twait, params.Teq, params.Nmc_starts, params.Nmc_starts * params.Nmc_config);
   else if(params.Gibbs) {	
@@ -103,7 +99,6 @@ int main(int argc, char ** argv) {
   Errs errs;
   while(!conv && iter < params.maxiter && model_sp <= params.sparsity) {
     bool print_aux = false;
-    model.init_statistics();
     model.sample();
     double lrav=model.update_parameters(fm,sm,iter);
     model.compute_errors(fm,sm,cov,errs);
@@ -147,7 +142,6 @@ int main(int argc, char ** argv) {
   /* END ITERATION LOOP */
 
   /* FINAL OPERATIONS */
-  model.init_statistics();
   model.sample(); // compute 3rd order moments through sampling and possibly print the sequences
   if(compute_tm)
     compute_third_order_correlations();

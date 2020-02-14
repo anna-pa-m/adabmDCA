@@ -361,36 +361,51 @@ class Model {
       fp  = fopen(params->file_samples, "a");
     if(params->file_en)
       fe = fopen(params->file_en, "a");
-    for(int t=0; t < params->Teq; t++) {
+    for(int t=0; t < params->Teq * L; t++) {
       MC_step(curr_state1);
       MC_step(curr_state2);
     }
     valarray<int> qs(6);
     vector<int> old_state1, old_state2, oldold_state1, oldold_state2;
-    for(int n = 0; n < params->Nmc_config; n++) {
+    update_statistics(curr_state1);        
+    update_statistics(curr_state2);
+    if(compute_tm) {
+      update_tm_statistics(curr_state1);
+      update_tm_statistics(curr_state2);
+    }
+    double o12=overlap(curr_state1,curr_state2);
+    qs[0]+=o12;
+    qs[1]+=(o12*o12);
+    for(int n = 0; n < params->Nmc_config - 1; n++) { 
       oldold_state1=old_state1;
       oldold_state2=old_state2;
       old_state1=curr_state1;
       old_state2=curr_state2;
-      for(int t=0; t < params->Twait; t++) {
+      for(int t=0; t < params->Twait * L; t++) {
 	MC_step(curr_state1);
 	MC_step(curr_state2);
       }
-      double o1=overlap(old_state1,curr_state1);
-      double o2=overlap(old_state2,curr_state2);
-      double o12=overlap(curr_state1,curr_state2);
+      update_statistics(curr_state1);
+      update_statistics(curr_state2);
+      if(compute_tm) {
+	update_tm_statistics(curr_state1);
+	update_tm_statistics(curr_state2);
+      }
+      o12=overlap(curr_state1,curr_state2);
       qs[0]+=o12;
       qs[1]+=(o12*o12);
-      qs[2]+=(o1+o2);
-      qs[3]+=(o1*o1+o2*o2);
       if (n>0) {
+	double o1=overlap(old_state1,curr_state1);
+	double o2=overlap(old_state2,curr_state2);
+	qs[2]+=(o1+o2);
+	qs[3]+=(o1*o1+o2*o2);
+      }
+      if (n>1) {
 	double oo1=overlap(oldold_state1,curr_state1);
 	double oo2=overlap(oldold_state2,curr_state2);
 	qs[4]+=(oo1+oo2);
 	qs[5]+=(oo1*oo1+oo2*oo2);
       }
-      update_statistics(curr_state1);
-      update_statistics(curr_state2);
       if(params->file_samples) {
 	for(int i = 0; i < L; i++)
 	  fprintf(fp, "%d ", curr_state1[i]);
@@ -404,10 +419,6 @@ class Model {
 	fprintf(fe, "%lf\n", energy(curr_state1));
 	fprintf(fe, "%lf\n", energy(curr_state2));
       }
-      if(compute_tm) {
-	update_tm_statistics(curr_state1);
-	update_tm_statistics(curr_state2);
-      }
     }
     if(params->file_samples)
       fclose(fp);
@@ -417,6 +428,7 @@ class Model {
   }
 
   int sample() {
+    init_statistics();
     vector<int> curr_state1(L);
     vector<int> curr_state2(L);
     valarray<int> qs(6);
@@ -431,21 +443,21 @@ class Model {
     double nse=params->Nmc_config*(params->Nmc_starts/2);
     double qext=qs[0]/nse;
     double dqext=sqrt(qs[1]/(nse-1)-qs[0]*qs[0]/nse/(nse-1))/sqrt(nse);
-    double nsi1=2*params->Nmc_config*(params->Nmc_starts/2);
-    double qin1=qs[2]/nsi1;
-    double dqin1=sqrt(qs[3]/(nsi1-1)-qs[2]*qs[2]/nsi1/(nsi1-1))/sqrt(nsi1);
-    double nsi2=(2*params->Nmc_config - 1)*(params->Nmc_starts/2);
-    double qin2=qs[4]/nsi2;
-    double dqin2=sqrt(qs[5]/(nsi2-1)-qs[4]*qs[4]/nsi2/(nsi2-1))/sqrt(nsi2);
+    double nsi1=(params->Nmc_config-1)*params->Nmc_starts;
+    double qin1=nsi1>0 ? qs[2]/nsi1 : 0;
+    double dqin1=nsi1>1 ? sqrt(qs[3]/(nsi1-1)-qs[2]*qs[2]/nsi1/(nsi1-1))/sqrt(nsi1) : 0;
+    double nsi2=(params->Nmc_config-2)*params->Nmc_starts;
+    double qin2=nsi2>0 ? qs[4]/nsi2 : 0;
+    double dqin2=nsi2>1 ? sqrt(qs[5]/(nsi2-1)-qs[4]*qs[4]/nsi2/(nsi2-1))/sqrt(nsi2) : 0;
     int test1=(abs(qext-qin1)<3*sqrt(dqext*dqext+dqin1*dqin1) ? 1 : 0);
     int test2=(abs(qext-qin2)<3*sqrt(dqext*dqext+dqin2*dqin2) ? 1 : 0);
     cout<<"done, q_ext: "<<qext<<" +- "<<dqext<<" q_int_1: "<<qin1<<" +- "<<dqin1<<" q_int_2: "<<qin2<<" +- "<<dqin2<<" Test_eq1: "<<test1<<" Test_eq2: "<<test2<<endl;
     if (test1) {
-      if (params->Twait > L) params->Twait-=L;
+      if (params->Twait > 1) params->Twait-=1;
       params->Teq = 2*params->Twait;
       cout<<"Reduced equilibration time, Teq="<<params->Teq<<" Twait="<<params->Twait<<endl;
     } else if (!test2) {
-      params->Twait+=L;
+      params->Twait+=1;
       params->Teq = 2*params->Twait;
       cout<<"Increased equilibration time, Teq="<<params->Teq<<" Twait="<<params->Twait<<endl;
     }

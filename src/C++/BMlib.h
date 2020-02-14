@@ -71,10 +71,10 @@ class Params {
     learn_strat = 0;
     nprint = 100;
     nprintfile = 500;
-    Teq = 0;
+    Teq = 20;
     Nmc_starts = 1000;
     Nmc_config = 50;
-    Twait = 0;
+    Twait = 10;
     maxiter = 2000;
   }
   int read_params (int & argc, char ** argv) {
@@ -225,8 +225,8 @@ class Params {
 				fprintf(stdout, "-n : Number of MC configurations per chain, default: %d\n", Nmc_config);
 				fprintf(stdout, "-p : (optional file) Initial parameters J, h, default: random [-1e-3, 1e-3]\n");
 				fprintf(stdout, "-c : Convergence tolerance, default: %.3e\n", conv);
-				fprintf(stdout, "-e : Initial MC equilibration time, default: 20 * L\n");
-				fprintf(stdout, "-t : Initial sampling time of MC algorithm, default: 10 * L\n");
+				fprintf(stdout, "-e : Initial MC equilibration time (in MCsweeps), default: 20 \n");
+				fprintf(stdout, "-t : Initial sampling time of MC algorithm (in MCsweeps), default: 10 \n");
 				fprintf(stdout, "-i : Maximum number of iterations, default: %d\n", maxiter);
 				fprintf(stdout, "-z : Print output every x iterations, default: %d\n", nprint);
 				fprintf(stdout, "-m : Print Frobenius norms and parameters every x iterations, default: %d\n", nprintfile);
