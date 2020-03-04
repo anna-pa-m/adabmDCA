@@ -23,9 +23,9 @@ double * w;
 int ** idx;
 int * tmp_idx;
 double * sorted_struct;
-double * fm;
-double ** sm;
-double ** cov;
+vector<double> fm;
+vector< vector<double> > sm;
+vector< vector<double> > cov;
 double * tm;
 int ** tm_index;
 //END
@@ -471,15 +471,12 @@ int print_alphabet(char * ctype) {
 
 
 int alloc_structures(Params & params) {
-  // one-point frequencies and fields
-  fm = (double *)calloc(L*q, sizeof(double));
-  // two-point frequencies and fields
-  sm = (double **)calloc(L*q, sizeof(double *));
-  cov = (double **)calloc(L*q, sizeof(double *));
-  for(int i = 0; i < L*q; i++) {
-    sm[i] = (double *)calloc(L*q, sizeof(double));
-    cov[i] = (double *)calloc(L*q, sizeof(double));
-  }
+  fm.clear();
+  fm.resize(L*q,0);
+  sm.clear();
+  sm.resize(L*q,fm);
+  cov.clear();
+  cov.resize(L*q,fm);
   // variables for sorting
   if(params.sparsity > 0 || params.compwise || params.blockwise) {
     int n = L*(L-1)*q*q/2;
@@ -509,6 +506,7 @@ int alloc_structures(Params & params) {
 
 
 int ** read_msa(char * filename, char * ctype, int & M, int & L, int & q) {
+        fprintf(stdout, "Reading MSA from %s\n", filename);
 	FILE * filemsa;
 	char ch;
 	int readseq = 0, newseq = 0, i;
@@ -571,78 +569,78 @@ int ** read_msa(char * filename, char * ctype, int & M, int & L, int & q) {
 	return msa;
 }
 
-int read_freq(double * fm, double ** sm, double ** cov, Params & params,int &M, int &L, int &q) {    /// FZ: TO BE CHECKED
+int read_freq(vector<double> & fm, vector< vector<double> > & sm, vector< vector<double> > & cov, Params & params,int &M, int &L, int &q) {    /// FZ: TO BE CHECKED
 
-	FILE * filefreq;
-	int i, j, a, b;
-	char ch, cha,chb, t;
-	char tmp[1024];
-	double aux;
-
-	if(!params.file_freq || !(filefreq = fopen(params.file_freq, "r"))) {
-		fprintf(stderr, "I couldn't open %s\n", params.file_freq);
-		exit(EXIT_FAILURE);
-	} else {
-	  fprintf(stdout, "Reading frequencies from %s\n", params.file_freq);
-	}
-	L = 0;
-	while(!feof(filefreq) && fgets(tmp, 1024, filefreq) && sscanf(tmp, "%c ", &t) == 1) {
-	  switch (t) {
-	    case 'm':
-	      sscanf(tmp, "m %d %c %lf \n", &i, &ch, &aux);
-	      if(i+1 > L)
-		L = i+1;
-	      break;
-	  }
-	}
-        fprintf(stdout, "L = %i\n", L);
-	alloc_structures(params);
-	rewind(filefreq);
-	while (!feof(filefreq) && fgets(tmp, 1024, filefreq) && sscanf(tmp, "%c ", &t) == 1) {
-	  switch(t) {
-	    case 's':
-	      sscanf(tmp, "s %d %d %c %c %lf \n", &i, &j, &cha, &chb, &aux);  
-	      if(!strcmp(params.ctype, "a")) {
-		a = convert_char_amino(cha); 
-		b = convert_char_amino(chb);
-	      } else if(!strcmp(params.ctype, "n")) {
-		a = convert_char_nbase(cha);
-		b = convert_char_nbase(chb);
-	      } else if(!strcmp(params.ctype, "i")) {
-		a = convert_char_ising(cha);
-		b = convert_char_ising(chb);
-	      } else if(!strcmp(params.ctype, "e")) {
-		a = convert_char_epi(cha);
-		b = convert_char_epi(chb);
-	      }
-//	      printf("%d %d %d %d %lf\n", i,a,j,b,aux);
-	      if(i != j) {
-		sm[i*q+a][j*q+b] = aux + params.pseudocount;
-		sm[j*q+b][i*q+a] = aux + params.pseudocount;
-	      }
-	      break;
-	    case 'm':
-	      sscanf(tmp, "m %d %c %lf \n", &i, &ch, &aux);
-	      if(!strcmp(params.ctype, "a"))  
-	       a = convert_char_amino(ch);
-	      else if(!strcmp(params.ctype, "n")) 
-		a = convert_char_nbase(ch);
-	      else if(!strcmp(params.ctype, "i")) 
-		a = convert_char_ising(ch);
-	      else if(!strcmp(params.ctype, "e")) 
-		a = convert_char_epi(ch);
-//		printf("%d %d %lf\n", i,a,aux);
-	        fm[i*q+a] = aux + params.pseudocount;
-	      break;
-	    }
+  FILE * filefreq;
+  int i, j, a, b;
+  char ch, cha,chb, t;
+  char tmp[1024];
+  double aux;
+  
+  if(!params.file_freq || !(filefreq = fopen(params.file_freq, "r"))) {
+    fprintf(stderr, "I couldn't open %s\n", params.file_freq);
+    exit(EXIT_FAILURE);
+  } else {
+    fprintf(stdout, "Reading frequencies from %s\n", params.file_freq);
+  }
+  L = 0;
+  while(!feof(filefreq) && fgets(tmp, 1024, filefreq) && sscanf(tmp, "%c ", &t) == 1) {
+    switch (t) {
+    case 'm':
+      sscanf(tmp, "m %d %c %lf \n", &i, &ch, &aux);
+      if(i+1 > L)
+	L = i+1;
+      break;
+    }
+  }
+  fprintf(stdout, "L = %i, M = %i, q = %i, alphabet = %s\n", L, M, q, params.ctype);
+  alloc_structures(params);
+  rewind(filefreq);
+  while (!feof(filefreq) && fgets(tmp, 1024, filefreq) && sscanf(tmp, "%c ", &t) == 1) {
+    switch(t) {
+    case 's':
+      sscanf(tmp, "s %d %d %c %c %lf \n", &i, &j, &cha, &chb, &aux);  
+      if(!strcmp(params.ctype, "a")) {
+	a = convert_char_amino(cha); 
+	b = convert_char_amino(chb);
+      } else if(!strcmp(params.ctype, "n")) {
+	a = convert_char_nbase(cha);
+	b = convert_char_nbase(chb);
+      } else if(!strcmp(params.ctype, "i")) {
+	a = convert_char_ising(cha);
+	b = convert_char_ising(chb);
+      } else if(!strcmp(params.ctype, "e")) {
+	a = convert_char_epi(cha);
+	b = convert_char_epi(chb);
       }
-
-      for(i = 0; i < q*L; i++) 
-	for(j = 0; j < q*L; j++) 
-	  cov[i][j] = sm[i][j] - fm[i]*fm[j];
-
-      return 0;
-
+      //	      printf("%d %d %d %d %lf\n", i,a,j,b,aux);
+      if(i != j) {
+	sm[i*q+a][j*q+b] = aux;
+	sm[j*q+b][i*q+a] = aux;
+      }
+      break;
+    case 'm':
+      sscanf(tmp, "m %d %c %lf \n", &i, &ch, &aux);
+      if(!strcmp(params.ctype, "a"))  
+	a = convert_char_amino(ch);
+      else if(!strcmp(params.ctype, "n")) 
+	a = convert_char_nbase(ch);
+      else if(!strcmp(params.ctype, "i")) 
+	a = convert_char_ising(ch);
+      else if(!strcmp(params.ctype, "e")) 
+	a = convert_char_epi(ch);
+      //		printf("%d %d %lf\n", i,a,aux);
+      fm[i*q+a] = aux;
+      break;
+    }
+  }
+  
+  for(i = 0; i < q*L; i++) 
+    for(j = 0; j < q*L; j++) 
+      cov[i][j] = sm[i][j] - fm[i]*fm[j];
+  
+  return 0;
+  
 }
 
 
@@ -701,7 +699,7 @@ double * compute_w(char * filename, char * label, double w_th, int ** msa, int &
 	return w;
 }
 
-int compute_empirical_statistics(double * fm, double ** sm, double ** cov, double & pseudocount, int ** msa, double * w, int M, int L, int q) {
+int compute_empirical_statistics(vector<double> & fm, vector< vector<double> > & sm, vector< vector<double> > & cov, double & pseudocount, int ** msa, double * w, int M, int L, int q) {
   fprintf(stdout, "Computing empirical statistics...");
   fflush(stdout);
   double Meff = 0;

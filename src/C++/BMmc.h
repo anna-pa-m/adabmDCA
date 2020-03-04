@@ -44,7 +44,7 @@ struct Errs {
 
 class Model {
  public:
-  int q, L, M;
+  int q, L;
   vector<double> h, Gh;
   vector< vector<double> > J, decJ, GJ;
   bool Gibbs;
@@ -52,8 +52,8 @@ class Model {
   double alpha, acc;  // for FIRE
   int counter;   // for FIRE
 
- Model(int _q, int _L, int _M, Params * _params):
-  q(_q),L(_L),M(_M),h(L*q,0),J(L*q,h),decJ(L*q,h),Gibbs(false),params(_params),alpha(0.1),acc(1),counter(0) {
+ Model(int _q, int _L, Params * _params):
+  q(_q),L(_L),h(L*q,0),J(L*q,h),decJ(L*q,h),Gibbs(false),params(_params),alpha(0.1),acc(1),counter(0) {
     if (params->learn_strat == 1 || params->learn_strat == 2 || params->learn_strat == 5) {
       Gh.clear();
       Gh.resize(L*q,0);
@@ -64,10 +64,9 @@ class Model {
 
   /******************** METHODS FOR INIT AND OUTPUT ***********************************************************/
 
-  void resize(int _q, int _L, int _M) {
+  void resize(int _q, int _L) {
     q=_q;
     L=_L;
-    M=_M;
     h.clear();
     h.resize(L*q,0);
     J.clear();
@@ -86,7 +85,7 @@ class Model {
     sm_s.resize(L*q,fm_s);
   }
 
-  int remove_gauge_freedom(double pseudocount, double ** cov) {
+  int remove_gauge_freedom(double pseudocount, vector< vector<double> > & cov) {
     double sorted_matrix[q*q];
     int mapping[q*q];
     int idx_aux[q*q][2];
@@ -123,7 +122,7 @@ class Model {
   }
   
   
-  int initialize_parameters(double * fm) {
+  int initialize_parameters(vector<double> & fm) {
     if (params->Metropolis && !params->Gibbs) {
       Gibbs=false;
     } else if (!params->Metropolis && params->Gibbs) {
@@ -202,7 +201,7 @@ class Model {
     return 0;
   }
   
-  int initialize_model(double ** cov) {
+  int initialize_model(vector< vector<double> > & cov) {
     int n=0;
     if(!params->file_cc) {
       if(params->dgap) {
@@ -493,7 +492,7 @@ class Model {
     return 0;
   }
 
-  int compute_errors(double * fm, double ** sm, double ** cov, Errs & errs) {
+  int compute_errors(vector<double> & fm, vector< vector<double> > & sm, vector< vector<double> > & cov, Errs & errs) {
     errs.errnorm = 0;
     errs.merrh = 0;
     errs.merrJ = 0;
@@ -517,7 +516,7 @@ class Model {
     return 0;
   }
 
-  double pearson(double ** cov) {
+  double pearson(vector< vector<double> > & cov) {
     double mean_cov_s = 0.0;
     double mean_cov = 0.0;
     double mean_prod = 0.0;
@@ -556,7 +555,7 @@ class Model {
 
   /******************** METHODS FOR STATISTICS ***********************************************************/
 
-  double update_parameters(double * fm, double ** sm, int iter) {
+  double update_parameters(vector<double> & fm, vector< vector<double> > & sm, int iter) {
     if (params->learn_strat != 5) {
       double lrav=0;
       int n=0;

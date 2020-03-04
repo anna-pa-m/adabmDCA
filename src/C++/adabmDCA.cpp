@@ -16,7 +16,7 @@ using namespace std;
 
 // structures and important parameters
 Params params;
-Model model(0,0,0,&params);
+Model model(0,0,&params);
 
 
 double model_sp;
@@ -77,7 +77,7 @@ int main(int argc, char ** argv) {
   } else if(params.file_freq) {
     read_freq(fm,sm,cov,params,M,L,q);
   }
-  model.resize(q,L,M);
+  model.resize(q,L);
   model.initialize_parameters(fm);
   int n = model.initialize_model(cov);
   model_sp = 0.0;
