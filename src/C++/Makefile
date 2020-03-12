@@ -1,4 +1,4 @@
-CFLAGS=-Wall -O3 -g -fopenmp
+CFLAGS=-Wall -O3 -g
 
 
 
