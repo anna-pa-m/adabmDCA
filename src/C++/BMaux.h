@@ -31,7 +31,7 @@ inline double min(double x, double y) {
 }
 
 
-int quicksort(double *x, int *tmp_idx, int first, int last) {
+int quicksort(vector<double> & x, vector<int> & tmp_idx, int first, int last) {
 	int i, j, pivot, index;
 	double temp;
 	if(first < last) {
@@ -82,6 +82,231 @@ int overlap(vector<int> & x1, vector<int> & x2) {
   }
   return q;
 }
+
+
+int convert_char_amino(char a) {
+	int i;
+	switch(a) {
+		case '-':
+			i = 0;
+			break;
+		case 'A':
+			i = 1;
+			break;
+		case 'B':
+			i = 0;
+			break;
+		case 'C':
+			i = 2;
+			break;
+		case 'D':
+			i = 3;
+			break;
+		case 'E':
+			i = 4;
+			break;
+		case 'F':
+			i = 5;
+			break;
+		case 'G':
+			i = 6;
+			break;
+		case 'H':
+			i = 7;
+			break;
+		case 'I':
+			i = 8;
+			break;
+		case 'J':
+			i = 0;
+			break;
+		case 'K':
+			i = 9;
+			break;
+		case 'L':
+			i = 10;
+			break;
+		case 'M':
+			i = 11;
+			break;
+		case 'N':
+			i = 12;
+			break;
+		case 'O':
+			i = 0;
+			break;
+		case 'P':
+			i = 13;
+			break;
+		case 'Q':
+			i = 14;
+			break;
+		case 'R':
+			i = 15;
+			break;
+		case 'S':
+			i = 16;
+			break;
+		case 'T':
+			i = 17;
+			break;
+		case 'U':
+			i = 0;
+			break;
+		case 'V':
+			i =18;
+			break;
+		case 'W':
+			i = 19;
+			break;
+		case 'X':
+			i = 0;
+			break;
+		case 'Y':
+			i = 20;
+			break;
+		case 'Z':
+			i = 0;
+			break;
+		default:
+			fprintf(stderr, "%c not recognized\n", a);
+			return(EXIT_FAILURE);
+	}
+	return i;
+}
+
+int convert_char_nbase(char a) {
+	int i;
+	switch(a) {
+		case '-':
+			i = 0;
+			break;
+		case 'A':
+			i = 1;
+			break;
+		case 'U':
+			i = 2;
+			break;
+		case 'T':
+			i = 2;
+			break;
+		case 'C':
+			i = 3;
+			break;
+		case 'G':
+			i = 4;
+			break;
+		default:
+			fprintf(stderr, "%c not recognized\n", a);
+			i = 0;
+			break;
+	}
+	return i;
+
+}
+
+
+int convert_char_epi(char a) {
+	int i;
+	switch(a) {
+		case '-':
+			i = 0;
+			break;
+		case 'A':
+			i = 1;
+			break;
+		case 'F':
+			i = 2;
+			break;
+		case '5':
+			i = 3;
+			break;
+		case 'T':
+			i = 4;
+			break;
+		case 't':
+			i = 5;
+			break;
+		case 'G':
+			i = 6;
+			break;
+		case 'E':
+			i = 7;
+			break;
+		case 'Z':
+			i = 8;
+			break;
+		case 'h':
+			i = 9;
+			break;
+		case 'B':
+			i = 10;
+			break;
+		case 'b':
+			i = 11;
+			break;
+		case 'e':
+			i = 12;
+			break;
+		case 'R':
+			i = 13;
+			break;
+		case 'r':
+			i = 14;
+			break;
+		case 'q':
+			i = 15;
+			break;
+		default:
+			fprintf(stderr, "%c not recognized, assuming '-'\n", a);
+			i = 0;
+			break;
+			//return(EXIT_FAILURE);
+	}
+	return i;
+}
+
+int convert_char_ising(char a){
+	int i;
+	switch(a) {
+		case 'A':
+			i = 0;
+			break;
+		case 'P':
+			i = 1;
+			break;
+		default:
+			fprintf(stderr, "%c not recognized\n", a);
+			return(EXIT_FAILURE);
+	}
+	return i;
+}
+
+int print_alphabet(char * ctype) {
+  if(ctype == NULL) {
+    fprintf(stdout, "Error in alphabet pointer\n");
+    exit(EXIT_FAILURE);
+  }  
+  int q=0;
+  if(!strcmp(ctype, "a")) {
+    fprintf(stdout, "Using alphabet: -ACDEFGHIKLMNPQRSTVWY\n");
+    q=21;
+  } else if(!strcmp(ctype, "n")) {
+    fprintf(stdout, "Using alphabet: -AUCG \n");
+    q = 5;
+  } else if(!strcmp(ctype, "i")) {
+    fprintf(stdout, "Using alphabet: AP (0,1) \n");
+    q = 2;
+  } else if(!strcmp(ctype, "e")) {
+    fprintf(stdout, "Using alphabet: -AF5TtGEZhBbeRrq \n");
+    q = 16;
+  } else {
+    fprintf(stderr, "Use 'a' for amino-acids or 'n' for nitrogenous bases\n");
+    return EXIT_FAILURE;
+  }
+  return q;
+}
+
 
 
 int print_frobenius_norms(vector<double> & h, vector< vector<double> > & J, int L, int q, char *normfile, char *parfile) {

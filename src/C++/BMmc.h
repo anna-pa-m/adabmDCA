@@ -10,27 +10,12 @@
 #include <iostream>
 #include <vector>
 #include <valarray>
-#include "BMaux.h"
 #include "BMlib.h"
 
 using namespace std;
 
 #ifndef BMmc
 #define BMmc
-
-/////////////////////////////////////INCAPSULATE ALL THIS///////////////////////
-vector<double> fm_s;
-vector< vector<double> > sm_s;
-// BEGIN - THIRD MOMENT
-bool compute_tm = false;
-int ntm = 0;
-double * tm_s;
-int load_third_order_indices();
-int update_tm_statistics(vector<int> & x);
-int compute_third_order_correlations();
-int print_statistics(char * file_sm, char *file_fm, char *file_tm);
-// END - THIRD MOMENT
-/////////////////////////////////////INCAPSULATE ALL THIS///////////////////////
 
 
 struct Errs {
@@ -47,55 +32,40 @@ class Model {
   int q, L;
   vector<double> h, Gh;
   vector< vector<double> > J, decJ, GJ;
+  vector<double> fm_s;
+  vector< vector<double> > sm_s;
+  vector<double> tm_s;
+  vector< vector<int> > * tm_index;
   bool Gibbs;
   Params * params;
   double alpha, acc;  // for FIRE
   int counter;   // for FIRE
+  double model_sp;
+  vector< vector<int> > idx;     
+  vector<int> tmp_idx;
+  vector<double> sorted_struct;
 
- Model(int _q, int _L, Params * _params):
-  q(_q),L(_L),h(L*q,0),J(L*q,h),decJ(L*q,h),Gibbs(false),params(_params),alpha(0.1),acc(1),counter(0) {
+ Model(int _q, int _L, Params * _params, int _ntm, vector< vector<int> > * _tm_index):
+  q(_q),L(_L),h(L*q,0),J(L*q,h),decJ(L*q,h),fm_s(L*q,0),sm_s(L*q,fm_s),tm_s(_ntm,0),tm_index(_tm_index),Gibbs(false),params(_params),alpha(0.1),acc(1),counter(0),model_sp(0) {
     if (params->learn_strat == 1 || params->learn_strat == 2 || params->learn_strat == 5) {
       Gh.clear();
       Gh.resize(L*q,0);
       GJ.clear();
       GJ.resize(L*q,Gh);
     }
+    init_decimation_variables();
   }
 
   /******************** METHODS FOR INIT AND OUTPUT ***********************************************************/
 
-  void resize(int _q, int _L) {
-    q=_q;
-    L=_L;
-    h.clear();
-    h.resize(L*q,0);
-    J.clear();
-    J.resize(L*q,h);
-    decJ.clear();
-    decJ.resize(L*q,h);
-    if (params->learn_strat == 1 || params->learn_strat == 2 || params->learn_strat == 5) {
-      Gh.clear();
-      Gh.resize(L*q,0);
-      GJ.clear();
-      GJ.resize(L*q,Gh);
-    }
-    fm_s.clear();
-    fm_s.resize(L*q,0);
-    sm_s.clear();
-    sm_s.resize(L*q,fm_s);
-  }
-
   int remove_gauge_freedom(double pseudocount, vector< vector<double> > & cov) {
-    double sorted_matrix[q*q];
-    int mapping[q*q];
+    vector<double> sorted_matrix(q*q,0);
+    vector<int> mapping(q*q);
     int idx_aux[q*q][2];
     int neff = 0;
     for(int i = 0; i < L; i++) {
       for(int j = i+1; j < L;j++) {
-	int k;
-	for(k = 0; k < q*q; k++)
-	  sorted_matrix[k] = 0;
-	k = 0;
+	int k = 0;
 	for(int a = 0; a < q; a++) {
 	  for(int b = 0; b < q; b++){
 	    mapping[k] = k;
@@ -122,7 +92,7 @@ class Model {
   }
   
   
-  int initialize_parameters(vector<double> & fm) {
+  int initialize_parameters(vector<double> & fm) {        /* {READ J,H FROM FILE} OR {SET J,H=0 OR H=IND.SITE.MODEL} */
     if (params->Metropolis && !params->Gibbs) {
       Gibbs=false;
     } else if (!params->Metropolis && params->Gibbs) {
@@ -131,7 +101,6 @@ class Model {
 	fprintf(stderr, "Conflict in Gibbs-Metropolis initialization\n");
 	exit(EXIT_FAILURE);
     }
-    /* {READ J,H FROM FILE} OR {SET J,H=0 OR H=IND.SITE.MODEL} */
     if(params->file_params) {
       fprintf(stdout, "Reading input parameters from file...");
       FILE *filep;
@@ -201,7 +170,7 @@ class Model {
     return 0;
   }
   
-  int initialize_model(vector< vector<double> > & cov) {
+  void initial_decimation(vector< vector<double> > & cov) {
     int n=0;
     if(!params->file_cc) {
       if(params->dgap) {
@@ -254,7 +223,7 @@ class Model {
       FILE *filep;
       if(!(filep = fopen(params->file_cc, "r"))) {
 	fprintf(stderr, "File %s not found\n", params->file_params);
-	return EXIT_FAILURE;
+	exit(EXIT_FAILURE);
       } else {
 	int  i,j, a, b;
 	char buffer[100];
@@ -280,7 +249,9 @@ class Model {
       }
       fprintf(stdout, "done\nNumber of links %d\n", n);
     }
-    return n;	
+    double nref=(L*(L-1)*q*q)/2;
+    model_sp=1.-n/nref;	
+    fprintf(stdout, "Sparsity after initialization: %lf\n", model_sp);
   }
 
   int print_model(char *filename) {
@@ -366,9 +337,9 @@ class Model {
     }
     valarray<int> qs(6);
     vector<int> old_state1, old_state2, oldold_state1, oldold_state2;
-    update_statistics(curr_state1);        
-    update_statistics(curr_state2);
-    if(compute_tm) {
+    update_statistics(curr_state1,fp,fe);        
+    update_statistics(curr_state2,fp,fe);
+    if(tm_s.size()>0) {
       update_tm_statistics(curr_state1);
       update_tm_statistics(curr_state2);
     }
@@ -384,9 +355,9 @@ class Model {
 	MC_step(curr_state1);
 	MC_step(curr_state2);
       }
-      update_statistics(curr_state1);
-      update_statistics(curr_state2);
-      if(compute_tm) {
+      update_statistics(curr_state1,fp,fe);
+      update_statistics(curr_state2,fp,fe);
+      if(tm_s.size()>0) {
 	update_tm_statistics(curr_state1);
 	update_tm_statistics(curr_state2);
       }
@@ -405,19 +376,6 @@ class Model {
 	qs[4]+=(oo1+oo2);
 	qs[5]+=(oo1*oo1+oo2*oo2);
       }
-      if(params->file_samples) {
-	for(int i = 0; i < L; i++)
-	  fprintf(fp, "%d ", curr_state1[i]);
-	fprintf(fp, "\n");
-	for(int i = 0; i < L; i++)
-	  fprintf(fp, "%d ", curr_state2[i]);
-	fprintf(fp, "\n");
-	fflush(fp);
-      }
-      if(params->file_en) {
-	fprintf(fe, "%lf\n", energy(curr_state1));
-	fprintf(fe, "%lf\n", energy(curr_state2));
-      }
     }
     if(params->file_samples)
       fclose(fp);
@@ -431,7 +389,6 @@ class Model {
     vector<int> curr_state1(L);
     vector<int> curr_state2(L);
     valarray<int> qs(6);
-    cout<<"Start sampling..."<<flush;
     for(int s = 0; s < params->Nmc_starts/2; s++) {
       for(int i = 0; i < L; i++) {
 	curr_state1[i] = (int)rand() % q;
@@ -450,15 +407,15 @@ class Model {
     double dqin2=nsi2>1 ? sqrt(qs[5]/(nsi2-1)-qs[4]*qs[4]/nsi2/(nsi2-1))/sqrt(nsi2) : 0;
     int test1=(abs(qext-qin1)<3*sqrt(dqext*dqext+dqin1*dqin1) ? 1 : 0);
     int test2=(abs(qext-qin2)<3*sqrt(dqext*dqext+dqin2*dqin2) ? 1 : 0);
-    cout<<"done, q_ext: "<<qext<<" +- "<<dqext<<" q_int_1: "<<qin1<<" +- "<<dqin1<<" q_int_2: "<<qin2<<" +- "<<dqin2<<" Test_eq1: "<<test1<<" Test_eq2: "<<test2<<endl;
     if (test1) {
       if (params->Twait > 1) params->Twait-=1;
       params->Teq = 2*params->Twait;
-      cout<<"Reduced equilibration time, Teq="<<params->Teq<<" Twait="<<params->Twait<<endl;
+      cout<<"Reduced equilibration time, Teq="<<params->Teq<<" Twait="<<params->Twait<<" q_ext: "<<qext<<" +- "<<dqext<<" q_int_1: "<<qin1<<" +- "<<dqin1<<" q_int_2: "<<qin2<<" +- "<<dqin2<<" Test_eq1: "<<test1<<" Test_eq2: "<<test2<<endl;
+
     } else if (!test2) {
       params->Twait+=1;
       params->Teq = 2*params->Twait;
-      cout<<"Increased equilibration time, Teq="<<params->Teq<<" Twait="<<params->Twait<<endl;
+      cout<<"Increased equilibration time, Teq="<<params->Teq<<" Twait="<<params->Twait<<" q_ext: "<<qext<<" +- "<<dqext<<" q_int_1: "<<qin1<<" +- "<<dqin1<<" q_int_2: "<<qin2<<" +- "<<dqin2<<" Test_eq1: "<<test1<<" Test_eq2: "<<test2<<endl;
     }
     return 0;
   }
@@ -467,19 +424,27 @@ class Model {
 
   /******************** METHODS FOR STATISTICS ***********************************************************/
 
-  int init_statistics() {
+  void init_statistics() {
     for(int i = 0; i < L*q; i++) {
       fm_s[i] = 0;
       for(int j = 0; j < L*q; j++) {
 	sm_s[i][j] = 0;
       }
     }
-    for(int ind = 0; ind < ntm; ind++) 
+    for(int ind = 0; ind < tm_s.size(); ind++) 
       tm_s[ind] = 0;  
-    return 0;
+    FILE * fp;
+    if(params->file_samples) {
+      fp  = fopen(params->file_samples, "w");
+      fclose(fp);
+    }    
+    if(params->file_en) {
+      fp  = fopen(params->file_en, "w");
+      fclose(fp);
+    }    
   }
   
-  int update_statistics(vector<int> & x) {
+  void update_statistics(vector<int> & x, FILE * fp, FILE * fe) {
     int Ns = params->Nmc_starts * params->Nmc_config;
     for(int i = 0; i < L; i++) {
       fm_s[i*q + x[i]] += 1.0/Ns;
@@ -489,9 +454,45 @@ class Model {
 	sm_s[j*q + x[j]][i*q + x[i]] += 1.0/Ns;
       }
     }
-    return 0;
+    if(params->file_samples) {
+      for(int i = 0; i < L; i++)
+	fprintf(fp, "%d ", x[i]);
+      fprintf(fp, "\n");
+    }
+    if(params->file_en) {
+      fprintf(fe, "%lf\n", energy(x));
+    }
   }
 
+  void update_tm_statistics(vector<int> & x) {
+    int i, j, k, a, b, c;
+    int Ns = params->Nmc_starts * params->Nmc_config;
+    for(int ind = 0; ind < (*tm_index).size(); ind ++) {
+      i = (*tm_index)[ind][0];
+      j = (*tm_index)[ind][1];
+      k = (*tm_index)[ind][2];
+      a = (*tm_index)[ind][3];
+      b = (*tm_index)[ind][4];
+      c = (*tm_index)[ind][5];
+      if(x[i] == a && x[j] == b && x[k] == c)
+	tm_s[ind] += 1.0/Ns;
+    }
+  }
+
+  void compute_third_order_correlations() {
+    int ind, i, j, k, a, b, c;
+    for(ind = 0; ind < (*tm_index).size(); ind++) {
+      i = (*tm_index)[ind][0];
+      j = (*tm_index)[ind][1];
+      k = (*tm_index)[ind][2];
+      a = (*tm_index)[ind][3];
+      b = (*tm_index)[ind][4];
+      c = (*tm_index)[ind][5];
+      tm_s[ind] = tm_s[ind] - sm_s[i*q+a][j*q+b]*fm_s[k*q+c] - sm_s[i*q+a][k*q+c]*fm_s[j*q+b] - sm_s[j*q+b][k*q+c]*fm_s[i*q+a] + 2*fm_s[i*q+a]*fm_s[j*q+b]*fm_s[k*q+c]; 
+    }
+  }
+
+  
   int compute_errors(vector<double> & fm, vector< vector<double> > & sm, vector< vector<double> > & cov, Errs & errs) {
     errs.errnorm = 0;
     errs.merrh = 0;
@@ -553,7 +554,11 @@ class Model {
   }
   
 
-  /******************** METHODS FOR STATISTICS ***********************************************************/
+  /******************** METHODS FOR LEARNING ***********************************************************/
+
+  int n_links() {
+    return (int)((1.0 - model_sp) * (L*(L-1)/2)*q*q);
+  }
 
   double update_parameters(vector<double> & fm, vector< vector<double> > & sm, int iter) {
     if (params->learn_strat != 5) {
@@ -653,20 +658,88 @@ class Model {
     }
   }
 
+  /******************** METHODS FOR DECIMATION ***********************************************************/
 
+  void init_decimation_variables() {
+    if(params->sparsity > 0 || params->compwise || params->blockwise) {
+      int n = L*(L-1)*q*q/2;
+      idx.clear();
+      vector<int> tmp(4,0);
+      idx.resize(n,tmp);
+      sorted_struct.clear();
+      sorted_struct.resize(n,0);
+      tmp_idx.clear();
+      tmp_idx.resize(n,0);
+      int k = 0;
+      for(int i = 0; i < L; i++) {
+	for(int j = i+1; j < L; j++) {
+	  for(int a = 0; a < q; a++) {
+	    for(int b = 0; b < q; b++) {
+	      idx[k][0] = i;
+	      idx[k][1] = j;
+	      idx[k][2] = a;
+	      idx[k][3] = b;
+	      sorted_struct[k] = 0.0;
+	      k += 1;
+	    }
+	  }
+	}
+      }
+    }
+  }
+  
+  int decimate_compwise(int c, int iter) {
+    int i, j, a, b, index, m;
+    FILE *fileout;
+    char filename_aux[1000];
+    sprintf(filename_aux, "sDKL_couplings_%s_iter_%i.dat", params->label, iter);
+    fileout = fopen(filename_aux, "w");
+    double maxsdkl = -1e50;
+    printf("Decimating %d couplings\n",c);
+    for(int k = 0; k < tmp_idx.size(); k++) {
+      tmp_idx[k] = k;
+      i = idx[k][0];
+      j = idx[k][1];
+      a = idx[k][2];
+      b = idx[k][3];
+      if(decJ[i*q + a][j*q + b] > 0) {
+	m += 1;
+	double auxsm = sm_s[i*q+a][j*q+b] == 0 ? params->pseudocount : sm_s[i*q+a][j*q+b];
+	sorted_struct[k] = J[i*q+a][j*q+b]*auxsm - (J[i*q+a][j*q+b]*exp(-J[i*q+a][j*q+b])*auxsm)/(exp(-J[i*q+a][j*q+b])*auxsm+1-auxsm);
+	maxsdkl = max(maxsdkl, sorted_struct[k]);
+	fprintf(fileout, "J %i %i %i %i %.2e %f %f\n", i, j, a, b, sorted_struct[k], J[i*q+a][j*q+b], sm_s[i*q+a][j*q+b]);
+      } else {
+	double f = rand01();
+	sorted_struct[k] =  tmp_idx.size() + f; // to be optimized: elements should be removed instead of putting large numbers
+      }
+    }
+    fprintf(stdout, "Non-zeros parameters %d \n",m);
+    quicksort(sorted_struct, tmp_idx, 0, tmp_idx.size()-1);
+    for(int k = 0; k < c; k++) {
+      index = tmp_idx[k];
+      i = idx[index][0];
+      j = idx[index][1];
+      a = idx[index][2];
+      b = idx[index][3];
+      if(decJ[i*q+a][j*q+b] == 0) {printf("Error: coupling %d %d %d %d was already decimated\n",i,j,a,b);}
+      fprintf(fileout, "D %i %i %i %i %.2e %f %f\n", i, j, a, b, sorted_struct[k], J[i*q+a][j*q+b], sm_s[i*q+a][j*q+b]);
+      J[i*q+a][j*q+b] = 0.0;
+      J[j*q+b][i*q+a] = 0.0;
+      decJ[i*q+a][j*q+b] = 0.0;
+      decJ[j*q+b][i*q+a] = 0.0;
+    }
+    index = tmp_idx[c];
+    fflush(fileout);
+    fclose(fileout);
+    fprintf(stdout, "Smallest sDKL associated with the first kept coupling is %.2e (i: %i j: %i a: %i b: %i)\n", sorted_struct[c], idx[index][0], idx[index][1], idx[index][2], idx[index][3]);
+    double nref=(L*(L-1)*q*q)/2;
+    model_sp+=c/nref;
+    fprintf(stdout, "Sparsity after decimation is %f\n", model_sp);
+    return 0;
+  }
+  
   
 };
-
-
-
-
-
-
-
-
-
-
-
 
 
 

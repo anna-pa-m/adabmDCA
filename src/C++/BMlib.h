@@ -15,20 +15,6 @@ using namespace std;
 #ifndef BMlib
 #define BMlib
 
-///FZ: TO BE ENCAPSULATED IN A CLASS
-int q = 21, L, M;
-double Meff;
-int ** msa;
-double * w;
-int ** idx;
-int * tmp_idx;
-double * sorted_struct;
-vector<double> fm;
-vector< vector<double> > sm;
-vector< vector<double> > cov;
-double * tm;
-int ** tm_index;
-//END
 
 
 
@@ -37,7 +23,7 @@ class Params {
   char * file_msa, * file_freq, * file_w , * file_params, init, * label, * ctype, * file_3points, *file_cc, *file_samples, *file_en;
   bool Metropolis, Gibbs, rmgauge, dgap, gapnn, phmm, blockwise, compwise;
   double sparsity, rho, w_th,  regJ, lrateJ, lrateh, conv, pseudocount;
-  int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, Nmc_config, Twait, maxiter;
+  int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, Nmc_config, Twait, maxiter, dec_steps;
   Params() {
     file_msa = 0;
     file_w = 0;
@@ -76,10 +62,12 @@ class Params {
     Nmc_config = 50;
     Twait = 10;
     maxiter = 2000;
+    dec_steps = INT_MAX;
   }
+
   int read_params (int & argc, char ** argv) {
     int c;
-    while ((c = getopt(argc, argv, "y:b:f:w:l:u:v:s:n:m:p:j:t:o:i:a:c:z:g:e:k:x:S:d:T:C:MGIRAhDNE:HBWq:")) != -1) {
+    while ((c = getopt(argc, argv, "y:b:f:w:l:u:v:s:n:m:p:j:t:o:i:a:c:z:g:e:k:x:S:d:T:C:X:MGIRAhDNE:HBWq:")) != -1) {
 		switch (c) {
 			case 'b':
 				ctype = optarg;
@@ -128,6 +116,9 @@ class Params {
 				break;
 			case 'x':
 				sparsity = atof(optarg);
+				break;
+			case 'X':
+				dec_steps = atoi(optarg);
 				break;
 			case 'l':
 				w_th = atof(optarg);
@@ -198,6 +189,7 @@ class Params {
 			case 'h':
 				fprintf(stdout, "Here's the list of the instructions\n");
 				fprintf(stdout, "-f : MSA alignment in FASTA format\n");
+				fprintf(stdout, "-q : Read frequencies from file - no MSA\n");
 				fprintf(stdout, "-d : Pseudo-count, default: 1/M \n");
 				fprintf(stdout, "-b : Alphabet. \n  \ta : amino-acids. \n \tn : nucleic acids. \n \ti : present/absent. \n \te : epigenetic data. \n \tDefault: a\n");
 				fprintf(stdout, "-w : (optional file) weights file\n");
@@ -209,6 +201,7 @@ class Params {
 				fprintf(stdout, "-g : L1 Regularization (J parameters), default :%.3e\n", regJ);
 				fprintf(stdout, "-k : Label used in output files\n");
 				fprintf(stdout, "-x : Required sparsity. Add -B for block-wise decimation or -W for component-wise decimation\n");
+				fprintf(stdout, "-X : Decimate every x steps even if not converged (default: infinite)\n");
 				fprintf(stdout, "-B : (flag) A block-wise decimation is applied to the couplings using sDKL as a criterion. Default: false\n");
 				fprintf(stdout, "-W : (flag) A component-wise decimation is applied to the couplings using sDKL as a criterion. Default: false\n");
 				fprintf(stdout, "-R : (flag) Zero J,H initialization\n");
@@ -217,13 +210,12 @@ class Params {
 				fprintf(stdout, "-D : (flag) DGap model: Only first moments of gap statistics are fitted\n");
 				fprintf(stdout, "-N : (flag) GapNN model: Fit first moments and nearest-neighbors second moments gap statistics\n");
 				fprintf(stdout, "-H : (flag) Hmmer model: profile + couplings(gap, gap) for nearest-neighbours\n");
-				fprintf(stdout, "-P : (flag) Decimate J(i,j,a,b) looking at min(sec. mom., parameter)\n");
 				fprintf(stdout, "-G : (flag) Using Gibbs sampling\n");
 				fprintf(stdout, "-M : (flag) Using Metropolis-Hastings sampling\n");
 				fprintf(stdout, "-y : Seed of random number generator, default: %d\n", seed);
 				fprintf(stdout, "-s : Metropolis chains, default: %d\n", Nmc_starts);
 				fprintf(stdout, "-n : Number of MC configurations per chain, default: %d\n", Nmc_config);
-				fprintf(stdout, "-p : (optional file) Initial parameters J, h, default: random [-1e-3, 1e-3]\n");
+				fprintf(stdout, "-p : (optional file) Initial parameters J, h\n");
 				fprintf(stdout, "-c : Convergence tolerance, default: %.3e\n", conv);
 				fprintf(stdout, "-e : Initial MC equilibration time (in MCsweeps), default: 20 \n");
 				fprintf(stdout, "-t : Initial sampling time of MC algorithm (in MCsweeps), default: 10 \n");
@@ -240,519 +232,423 @@ class Params {
 		}
 	}
 
-  return 0;
+    return 0;
   }
+  
+  void print_learning_strategy() {
+    fprintf(stdout, "****** Initializing model ******\n");
+    if(Metropolis)
+      fprintf(stdout, "Performing Metropolis-Hastings MC.\nInitial sampling time: %d\nInitial equilibration time: %d\nUsing %d seeds and tot. number of points %d\n", Twait, Teq, Nmc_starts, Nmc_starts * Nmc_config);
+    else if(Gibbs) {	
+      fprintf(stdout, "Performing Gibbs sampling.\nInitial sampling time: %d\nInitial equilibration time: %d\nUsing %d seeds and tot. number of points %d\n", Twait, Teq, Nmc_starts, Nmc_starts * Nmc_config);
+    }
+    fprintf(stdout, "Learning strategy: ");
+    switch(learn_strat) {
+    case 0:
+      fprintf(stdout, "Using standard gradient descent with constant learning rate (for J %.3e, for h %.3e)\n", lrateJ, lrateh);
+      break;
+    case 1:
+      fprintf(stdout, "Using adagrad\n");
+      break;
+    case 2:
+      fprintf(stdout, "Using RMSprop with reinforcement %.2f\n", rho);
+      break;
+    case 3:
+      fprintf(stdout, "Using search and converge with decay time %d and learning rate (for J %.3e, for h %.3e)\n", tau, lrateJ, lrateh);
+      break;
+    case 4:
+      fprintf(stdout, "Using adam : NOT YET IMPLEMENTED, EXIT\n");
+      exit(EXIT_FAILURE);
+      break;
+    case 5:
+      fprintf(stdout, "Using FIRE\n");
+      break;
+    }
+    if(sparsity > 0.0) {
+      if (regJ != 0.0) {
+	fprintf(stdout, "L1 regularization is not compatible with sparsification\n");
+	exit(1);
+      }
+      fprintf(stdout, "Required sparsity %.3f", sparsity);
+      if (!compwise && !blockwise) {
+	fprintf(stdout, "\n Please use either -W or -B flags to specify decimation type! EXIT\n");
+	exit(EXIT_FAILURE);
+      } else if(compwise && !blockwise) {
+	fprintf(stdout, " using (component-wise) Kullback-Leibler based decimation");
+      } else if (!compwise && blockwise) {
+	fprintf(stdout, " using (block-wise) Kullback-Leibler based decimation -- NOT YET IMPLEMENTED!\n");
+	exit(EXIT_FAILURE);
+      } else if (compwise && blockwise) {
+	fprintf(stdout, "\n Please do not use -W and -B flags together! EXIT\n");
+	exit(EXIT_FAILURE);
+      }
+      if (dec_steps==INT_MAX)
+	fprintf(stdout, " at convergence\n");
+      else
+	fprintf(stdout, " every at most %d steps\n", dec_steps);
+    }
+    if(regJ > 0)
+      fprintf(stdout, "L1 regularization on couplings: lambda %.1e\n", regJ);
+    if(pseudocount)
+      fprintf(stdout, "Using pseudo-count: %1.e\n", pseudocount);
+
+  }
+  
   
 };
 
-int convert_char_amino(char a) {
-	int i;
-	switch(a) {
-		case '-':
-			i = 0;
-			break;
-		case 'A':
-			i = 1;
-			break;
-		case 'B':
-			i = 0;
-			break;
-		case 'C':
-			i = 2;
-			break;
-		case 'D':
-			i = 3;
-			break;
-		case 'E':
-			i = 4;
-			break;
-		case 'F':
-			i = 5;
-			break;
-		case 'G':
-			i = 6;
-			break;
-		case 'H':
-			i = 7;
-			break;
-		case 'I':
-			i = 8;
-			break;
-		case 'J':
-			i = 0;
-			break;
-		case 'K':
-			i = 9;
-			break;
-		case 'L':
-			i = 10;
-			break;
-		case 'M':
-			i = 11;
-			break;
-		case 'N':
-			i = 12;
-			break;
-		case 'O':
-			i = 0;
-			break;
-		case 'P':
-			i = 13;
-			break;
-		case 'Q':
-			i = 14;
-			break;
-		case 'R':
-			i = 15;
-			break;
-		case 'S':
-			i = 16;
-			break;
-		case 'T':
-			i = 17;
-			break;
-		case 'U':
-			i = 0;
-			break;
-		case 'V':
-			i =18;
-			break;
-		case 'W':
-			i = 19;
-			break;
-		case 'X':
-			i = 0;
-			break;
-		case 'Y':
-			i = 20;
-			break;
-		case 'Z':
-			i = 0;
-			break;
-		default:
-			fprintf(stderr, "%c not recognized\n", a);
-			return(EXIT_FAILURE);
-	}
-	return i;
-}
-
-int convert_char_nbase(char a) {
-	int i;
-	switch(a) {
-		case '-':
-			i = 0;
-			break;
-		case 'A':
-			i = 1;
-			break;
-		case 'U':
-			i = 2;
-			break;
-		case 'T':
-			i = 2;
-			break;
-		case 'C':
-			i = 3;
-			break;
-		case 'G':
-			i = 4;
-			break;
-		default:
-			fprintf(stderr, "%c not recognized\n", a);
-			i = 0;
-			break;
-	}
-	return i;
-
-}
 
 
-int convert_char_epi(char a) {
-	int i;
-	switch(a) {
-		case '-':
-			i = 0;
-			break;
-		case 'A':
-			i = 1;
-			break;
-		case 'F':
-			i = 2;
-			break;
-		case '5':
-			i = 3;
-			break;
-		case 'T':
-			i = 4;
-			break;
-		case 't':
-			i = 5;
-			break;
-		case 'G':
-			i = 6;
-			break;
-		case 'E':
-			i = 7;
-			break;
-		case 'Z':
-			i = 8;
-			break;
-		case 'h':
-			i = 9;
-			break;
-		case 'B':
-			i = 10;
-			break;
-		case 'b':
-			i = 11;
-			break;
-		case 'e':
-			i = 12;
-			break;
-		case 'R':
-			i = 13;
-			break;
-		case 'r':
-			i = 14;
-			break;
-		case 'q':
-			i = 15;
-			break;
-		default:
-			fprintf(stderr, "%c not recognized, assuming '-'\n", a);
-			i = 0;
-			break;
-			//return(EXIT_FAILURE);
-	}
-	return i;
-}
 
-int convert_char_ising(char a){
-	int i;
-	switch(a) {
-		case 'A':
-			i = 0;
-			break;
-		case 'P':
-			i = 1;
-			break;
-		default:
-			fprintf(stderr, "%c not recognized\n", a);
-			return(EXIT_FAILURE);
-	}
-	return i;
-}
+class Data {
+ public:
+  int q, L, M;
+  double Meff;
+  vector< vector<int> > msa;
+  vector<double> w;
+  vector<double> fm;
+  vector< vector<double> > sm;
+  vector< vector<double> > cov;
+  vector<double> tm; // Pay attention. File contains connected 3rd order correlations
+  vector< vector<int> > tm_index;
+  Params * params;
 
-int print_alphabet(char * ctype) {
-  if(ctype == NULL) {
-    fprintf(stdout, "Error in alphabet pointer\n");
-    exit(EXIT_FAILURE);
-  }  
-  int q=0;
-  if(!strcmp(ctype, "a")) {
-    fprintf(stdout, "Using alphabet: -ACDEFGHIKLMNPQRSTVWY\n");
-    q=21;
-  } else if(!strcmp(ctype, "n")) {
-    fprintf(stdout, "Using alphabet: -AUCG \n");
-    q = 5;
-  } else if(!strcmp(ctype, "i")) {
-    fprintf(stdout, "Using alphabet: AP (0,1) \n");
-    q = 2;
-  } else if(!strcmp(ctype, "e")) {
-    fprintf(stdout, "Using alphabet: -AF5TtGEZhBbeRrq \n");
-    q = 16;
-  } else {
-    fprintf(stderr, "Use 'a' for amino-acids or 'n' for nitrogenous bases\n");
-    return EXIT_FAILURE;
+ Data(Params * _params):
+  params(_params) {
+    fprintf(stdout, "****** Initializing data structures ******\n");
+    q=print_alphabet(params->ctype);
+    if(params->file_msa) {
+      read_msa();
+      compute_w();
+      alloc_structures();
+      compute_empirical_statistics();
+    } else if(params->file_freq) {
+      read_freq();
+    }
+    load_third_order_indices();
   }
-  return q;
-}
 
+  void read_msa() {
+    char * filename=params->file_msa;
+    fprintf(stdout, "Reading MSA from %s\n", filename);
+    FILE * filemsa;
+    char ch;
+    int readseq = 0, newseq = 0;
+    if(!filename || !(filemsa = fopen(filename, "r"))) {
+      fprintf(stderr, "I couldn't open %s\n", filename);
+      exit(EXIT_FAILURE);
+    }
+    vector<int> auxseq;
+    M = 0;
+    L = 0;
+    msa.clear();
+    while((ch = fgetc(filemsa)) != EOF) {
+      if (ch == '>') {
+	newseq = 1;
+	readseq = 0;
+      } else if (ch == '\n' && newseq == 1) {
+	readseq = 1;
+	newseq = 0;
+	auxseq.clear();
+      } else if (ch != '\n' && newseq == 0 && readseq == 1) {
+	if(!strcmp(params->ctype, "a"))
+	  auxseq.push_back(convert_char_amino(ch));
+	else if(!strcmp(params->ctype, "n"))
+	  auxseq.push_back(convert_char_nbase(ch));
+	else if(!strcmp(params->ctype, "i"))
+	  auxseq.push_back(convert_char_ising(ch));
+	else if(!strcmp(params->ctype, "e"))
+	  auxseq.push_back(convert_char_epi(ch));
+      } else if (ch == '\n' && newseq == 0 && readseq == 1) {
+	if (L == 0) {
+	  L = auxseq.size();
+	} else if (L!=auxseq.size()) {
+	  cout<<"MSA reading error!"<<endl;
+	  exit(1);
+	}
+	readseq = 0;
+	msa.push_back(auxseq);
+      }
+    }
+    M = msa.size();
+    fprintf(stdout, "Reading alignment completed.\nM = %i L = %i q = %i \n", M, L, q);
+    fclose(filemsa);
+  }
 
+  void compute_w() {
+    w.clear();
+    w.resize(M,0);
+    char * filename = params->file_w;
+    char * label = params->label;
+    if(filename) {
+      fprintf(stdout, "Reading weights from file...");
+      FILE *filew;
+      if(!(filew = fopen(filename, "r"))) {
+	fprintf(stderr, "File %s not found\n", filename);
+	exit(EXIT_FAILURE);
+      } else {
+	int i = 0;
+	double tmp;
+	while((fscanf(filew, "%lf", &tmp)) != EOF) {
+	  w[i] = tmp;
+	  i += 1;
+	}
+	fclose(filew);
+      }
+    } else {
+      fprintf(stdout, "Computing weights...");
+      fflush(stdout);
+      FILE *fw;
+      char file_w[1000];
+      sprintf(file_w,  "Weights_%s.dat", label);
+      fw = fopen(file_w, "w");
+      int m = 0, n = 0, d = 0, l = 0;
+      for (m = 0; m < M; m++)
+	w[m] = 1.0;
+      double h = L * (1 - params->w_th);
+      for(m = 0; m < M-1; m++) {
+	for (n = m+1; n < M; n++ ) {
+	  d = 0;
+	  for (l = 0; l < L; l++) {
+	    if(msa[m][l] == msa[n][l])
+	      d++;
+	  }
+	  if(d > h) {
+	    w[n] += 1;
+	    w[m] += 1;
+	  }
+	}
+      }
+      for (m = 0; m < M; m++) {
+	w[m] = 1.0 / w[m];
+	fprintf(fw,"%f\n", w[m]);
+	fflush(fw);
+      }
+      fclose(fw);
+    }
+    fprintf(stdout,"done\n");
+    fflush(stdout);
+  }
 
-int alloc_structures(Params & params) {
-  fm.clear();
-  fm.resize(L*q,0);
-  sm.clear();
-  sm.resize(L*q,fm);
-  cov.clear();
-  cov.resize(L*q,fm);
-  // variables for sorting
-  if(params.sparsity > 0 || params.compwise || params.blockwise) {
-    int n = L*(L-1)*q*q/2;
-    idx = (int **)calloc(n, sizeof(int *));
-    sorted_struct = (double *)calloc(n, sizeof(double));
-    tmp_idx = (int *)calloc(n, sizeof(int));
-    for(int i = 0; i < n;i++)
-      idx[i] = (int *)calloc(4, sizeof(int));
-    int k = 0;
+  void alloc_structures() {
+    fm.clear();
+    fm.resize(L*q,0);
+    sm.clear();
+    sm.resize(L*q,fm);
+    cov.clear();
+    cov.resize(L*q,fm);
+  }
+
+  void compute_empirical_statistics() {
+    fprintf(stdout, "Computing empirical statistics...");
+    fflush(stdout);
+    Meff = 0;
+    for(int m = 0; m < M; m++) {
+      Meff += w[m];
+      for(int i = 0; i < L; i++) {
+	fm[i*q + msa[m][i]] += w[m];
+	for(int j = i+1; j < L; j++) {
+	  sm[i*q + msa[m][i]][j*q + msa[m][j]] += w[m];
+	}
+      }
+    }
+    
+    if(!params->pseudocount)
+      params->pseudocount = 1.0/Meff;
+    for(int i = 0; i < L*q; i++) {
+      fm[i] = fm[i] / Meff + params->pseudocount;
+      sm[i][i] = fm[i];
+    }
     for(int i = 0; i < L; i++) {
       for(int j = i+1; j < L; j++) {
-	for(int a = 0; a < q; a++) {
+	for (int a = 0; a < q; a++) {
 	  for(int b = 0; b < q; b++) {
-	    idx[k][0] = i;
-	    idx[k][1] = j;
-	    idx[k][2] = a;
-	    idx[k][3] = b;
-	    sorted_struct[k] = 0.0;
-	    k += 1;
+	    sm[i*q+a][j*q+b] = sm[i*q+a][j*q+b] / Meff + params->pseudocount;
+	    sm[j*q+b][i*q+a] = sm[i*q+a][j*q+b];
 	  }
 	}
       }
     }
-  }
-  return 0;
-}
-
-
-int ** read_msa(char * filename, char * ctype, int & M, int & L, int & q) {
-        fprintf(stdout, "Reading MSA from %s\n", filename);
-	FILE * filemsa;
-	char ch;
-	int readseq = 0, newseq = 0, i;
-        int l = 0, m = -1;
-	char * auxseq;
-
-	if(!filename || !(filemsa = fopen(filename, "r"))) {
-		fprintf(stderr, "I couldn't open %s\n", filename);
-		exit(EXIT_FAILURE);
-	}
-
-	auxseq = (char *) malloc(1);
-	M = 0;
-	L = 0;
-	while((ch = fgetc(filemsa)) != EOF) {
-		if (ch == '>')
-		  M+= 1;
-	}
-	rewind(filemsa);
-        int ** msa;
-	while((ch = fgetc(filemsa)) != EOF) {
-		if (ch == '>') {
-			newseq = 1;
-			readseq = 0;
-			m += 1;
-		} else if (ch == '\n' && newseq == 1) {
-			readseq = 1;
-			newseq = 0;
-			l = 0;
-		} else if (ch != '\n' && newseq == 0 && readseq == 1) {
-			l += 1;
-			if (L == 0 && l > 1) {
-			  auxseq = (char *) realloc(auxseq, l * sizeof(int));
-				memset(auxseq + l, 0, sizeof(int));
-			}
-			if(!strcmp(ctype, "a"))
-				auxseq[l-1] = convert_char_amino(ch);
-			else if(!strcmp(ctype, "n"))
-				auxseq[l-1] = convert_char_nbase(ch);
-			else if(!strcmp(ctype, "i"))
-				auxseq[l-1] = convert_char_ising(ch);
-			else if(!strcmp(ctype, "e"))
-				auxseq[l-1] = convert_char_epi(ch);
-		} else if (ch == '\n' && newseq == 0 && readseq == 1) {
-			if (L == 0) {
-				L = l;
-				msa = (int **)calloc(M, sizeof(int *));
-				for (i = 0; i < M; i++)
-					msa[i] = (int *)calloc(L, sizeof(int));
-			}
-			readseq = 0;
-			for (i = 0; i < L; i++)
-				msa[m][i] = auxseq[i];
-		}
-	}
-
-	fprintf(stdout, "Reading alignment completed.\nM = %i L = %i q = %i \n", M, L, q);
-	free(auxseq);
-	fclose(filemsa);
-	return msa;
-}
-
-int read_freq(vector<double> & fm, vector< vector<double> > & sm, vector< vector<double> > & cov, Params & params,int &M, int &L, int &q) {    /// FZ: TO BE CHECKED
-
-  FILE * filefreq;
-  int i, j, a, b;
-  char ch, cha,chb, t;
-  char tmp[1024];
-  double aux;
-  
-  if(!params.file_freq || !(filefreq = fopen(params.file_freq, "r"))) {
-    fprintf(stderr, "I couldn't open %s\n", params.file_freq);
-    exit(EXIT_FAILURE);
-  } else {
-    fprintf(stdout, "Reading frequencies from %s\n", params.file_freq);
-  }
-  L = 0;
-  while(!feof(filefreq) && fgets(tmp, 1024, filefreq) && sscanf(tmp, "%c ", &t) == 1) {
-    switch (t) {
-    case 'm':
-      sscanf(tmp, "m %d %c %lf \n", &i, &ch, &aux);
-      if(i+1 > L)
-	L = i+1;
-      break;
-    }
-  }
-  fprintf(stdout, "L = %i, M = %i, q = %i, alphabet = %s\n", L, M, q, params.ctype);
-  alloc_structures(params);
-  rewind(filefreq);
-  while (!feof(filefreq) && fgets(tmp, 1024, filefreq) && sscanf(tmp, "%c ", &t) == 1) {
-    switch(t) {
-    case 's':
-      sscanf(tmp, "s %d %d %c %c %lf \n", &i, &j, &cha, &chb, &aux);  
-      if(!strcmp(params.ctype, "a")) {
-	a = convert_char_amino(cha); 
-	b = convert_char_amino(chb);
-      } else if(!strcmp(params.ctype, "n")) {
-	a = convert_char_nbase(cha);
-	b = convert_char_nbase(chb);
-      } else if(!strcmp(params.ctype, "i")) {
-	a = convert_char_ising(cha);
-	b = convert_char_ising(chb);
-      } else if(!strcmp(params.ctype, "e")) {
-	a = convert_char_epi(cha);
-	b = convert_char_epi(chb);
+    for(int i = 0; i < L*q; i++) {
+      for(int j = 0; j < L*q; j++) {
+	cov[i][j] = sm[i][j] - fm[i]*fm[j];
       }
-      //	      printf("%d %d %d %d %lf\n", i,a,j,b,aux);
-      if(i != j) {
-	sm[i*q+a][j*q+b] = aux;
-	sm[j*q+b][i*q+a] = aux;
-      }
-      break;
-    case 'm':
-      sscanf(tmp, "m %d %c %lf \n", &i, &ch, &aux);
-      if(!strcmp(params.ctype, "a"))  
-	a = convert_char_amino(ch);
-      else if(!strcmp(params.ctype, "n")) 
-	a = convert_char_nbase(ch);
-      else if(!strcmp(params.ctype, "i")) 
-	a = convert_char_ising(ch);
-      else if(!strcmp(params.ctype, "e")) 
-	a = convert_char_epi(ch);
-      //		printf("%d %d %lf\n", i,a,aux);
-      fm[i*q+a] = aux;
-      break;
     }
+    fprintf(stdout, "Meff: %lf\n", Meff);
+    fflush(stdout);
   }
   
-  for(i = 0; i < q*L; i++) 
-    for(j = 0; j < q*L; j++) 
-      cov[i][j] = sm[i][j] - fm[i]*fm[j];
-  
-  return 0;
-  
-}
-
-
-double * compute_w(char * filename, char * label, double w_th, int ** msa, int & M, int & L) {
-        double * w;
-	if(filename) {
-		fprintf(stdout, "Reading weights from file...");
-		FILE *filew;
-		if(!(filew = fopen(filename, "r"))) {
-			fprintf(stderr, "File %s not found\n", filename);
-			exit(EXIT_FAILURE);
-		} else {
-   		        w = (double *) calloc(M, sizeof(double));
-			int i = 0;
-			double tmp;
-			while((fscanf(filew, "%lf", &tmp)) != EOF) {
-				w[i] = tmp;
-				i += 1;
-			}
-			fclose(filew);
-		}
-	} else {
-		fprintf(stdout, "Computing weights...");
-		fflush(stdout);
-		FILE *fw;
-		char file_w[1000];
-		sprintf(file_w,  "Weights_%s.dat", label);
-		fw = fopen(file_w, "w");
-		w = (double *) calloc(M, sizeof(double));
-		int m = 0, n = 0, d = 0, l = 0;
-		for (m = 0; m < M; m++)
-			w[m] = 1.0;
-		double h = L * (1 - w_th);
-		for(m = 0; m < M-1; m++) {
-			for (n = m+1; n < M; n++ ) {
-				d = 0;
-				for (l = 0; l < L; l++) {
-					if(msa[m][l] == msa[n][l])
-						d++;
-				}
-				if(d > h) {
-					w[n] += 1;
-					w[m] += 1;
-				}
-			}
-		}
-		for (m = 0; m < M; m++) {
-			w[m] = 1.0 / w[m];
-			fprintf(fw,"%f\n", w[m]);
-			fflush(fw);
-		}
-		fclose(fw);
+  void read_freq() {    
+    FILE * filefreq;
+    int i, j, a, b;
+    char ch, cha,chb, t;
+    char tmp[1024];
+    double aux;
+    if(!params->file_freq || !(filefreq = fopen(params->file_freq, "r"))) {
+      fprintf(stderr, "I couldn't open %s\n", params->file_freq);
+      exit(EXIT_FAILURE);
+    } else {
+      fprintf(stdout, "Reading frequencies from %s\n", params->file_freq);
+    }
+    L = 0;
+    while(!feof(filefreq) && fgets(tmp, 1024, filefreq) && sscanf(tmp, "%c ", &t) == 1) {
+      switch (t) {
+      case 'm':
+	sscanf(tmp, "m %d %c %lf \n", &i, &ch, &aux);
+	if(i+1 > L)
+	  L = i+1;
+	break;
+      }
+    }
+    fprintf(stdout, "L = %i, M = %i, q = %i, alphabet = %s\n", L, M, q, params->ctype);
+    alloc_structures();
+    rewind(filefreq);
+    while (!feof(filefreq) && fgets(tmp, 1024, filefreq) && sscanf(tmp, "%c ", &t) == 1) {
+      switch(t) {
+      case 's':
+	sscanf(tmp, "s %d %d %c %c %lf \n", &i, &j, &cha, &chb, &aux);  
+	if(!strcmp(params->ctype, "a")) {
+	  a = convert_char_amino(cha); 
+	  b = convert_char_amino(chb);
+	} else if(!strcmp(params->ctype, "n")) {
+	  a = convert_char_nbase(cha);
+	  b = convert_char_nbase(chb);
+	} else if(!strcmp(params->ctype, "i")) {
+	  a = convert_char_ising(cha);
+	  b = convert_char_ising(chb);
+	} else if(!strcmp(params->ctype, "e")) {
+	  a = convert_char_epi(cha);
+	  b = convert_char_epi(chb);
 	}
-	fprintf(stdout,"done\n");
-	fflush(stdout);
-	return w;
-}
+	if(i != j) {
+	  sm[i*q+a][j*q+b] = aux;
+	  sm[j*q+b][i*q+a] = aux;
+	}
+	break;
+      case 'm':
+	sscanf(tmp, "m %d %c %lf \n", &i, &ch, &aux);
+	if(!strcmp(params->ctype, "a"))  
+	  a = convert_char_amino(ch);
+	else if(!strcmp(params->ctype, "n")) 
+	  a = convert_char_nbase(ch);
+	else if(!strcmp(params->ctype, "i")) 
+	  a = convert_char_ising(ch);
+	else if(!strcmp(params->ctype, "e")) 
+	  a = convert_char_epi(ch);
+	fm[i*q+a] = aux;
+	break;
+      }
+    }    
+    for(i = 0; i < q*L; i++) 
+      for(j = 0; j < q*L; j++) 
+	cov[i][j] = sm[i][j] - fm[i]*fm[j];  
+  }
 
-int compute_empirical_statistics(vector<double> & fm, vector< vector<double> > & sm, vector< vector<double> > & cov, double & pseudocount, int ** msa, double * w, int M, int L, int q) {
-  fprintf(stdout, "Computing empirical statistics...");
-  fflush(stdout);
-  double Meff = 0;
-  for(int m = 0; m < M; m++) {
-    Meff += w[m];
+
+  /******************** METHODS FOR 3RD ORDER STATISTICS ***********************************************************/
+
+  void load_third_order_indices() {
+    if(params->file_3points) {
+      fprintf(stdout, "Reading three points correlations indices...");
+      FILE *file3;
+      if(!(file3 = fopen(params->file_3points, "r"))) {
+	fprintf(stderr, "File %s not found \n", params->file_3points);
+	exit(1);
+      } else {
+	int i, j, k, a, b, c;
+	double value;
+	char buffer[1000];
+	tm_index.clear();
+	tm.clear();
+	vector<int> tmp_vec(6,0);
+	while (!feof(file3) && fgets(buffer, 1000, file3)) {
+	  if(sscanf(buffer, "%d %d %d %d %d %d %lf \n", &i, &j, &k, &a, &b, &c, &value) == 7) {
+	    tmp_vec[0] = i;
+	    tmp_vec[1] = j;
+	    tmp_vec[2] = k;
+	    tmp_vec[3] = a;
+	    tmp_vec[4] = b;
+	    tmp_vec[5] = c;
+	    tm_index.push_back(tmp_vec);
+	    tm.push_back(0.0);	
+	  }
+	}
+	fprintf(stdout, "Number of indices %d\n", (int)tm_index.size());
+	// compute 3rd order moments of msa, slow!
+	for(int ind =0; ind < tm_index.size(); ind++) {
+	  i = tm_index[ind][0];
+	  j = tm_index[ind][1];
+	  k = tm_index[ind][2];
+	  a = tm_index[ind][3];
+	  b = tm_index[ind][4];
+	  c = tm_index[ind][5];
+	  for(int m = 0; m < M; m++) 
+	    if(msa[m][i] == a && msa[m][j] == b && msa[m][k] == c)
+	      tm[ind] += w[m]/Meff;
+	}
+      }
+    } else {
+      fprintf(stdout, "No three-points correlations indices specified\n");
+    }  
+  }
+  
+  /******************** METHODS FOR OUTPUT ***********************************************************/
+  
+  void print_msa(char *filename) {
+    FILE *fp;
+    fp = fopen(filename, "w");    
+    for(int m = 0; m < M;m++) {
+      for(int i = 0; i < L; i++)
+	fprintf(fp, "%d ", msa[m][i]);
+      fprintf(fp, "\n");
+    }
+    fflush(fp);
+    fclose(fp);
+  }
+
+  int print_statistics(char *file_sm, char *file_fm, char *file_tm, vector<double> & fm_s, vector< vector<double> > & sm_s, vector<double> & tm_s) {
+    FILE *fs, *ff, *ft;
+    fs = fopen(file_sm, "w");
+    ff = fopen(file_fm, "w");
     for(int i = 0; i < L; i++) {
-      fm[i*q + msa[m][i]] += w[m];
       for(int j = i+1; j < L; j++) {
-	sm[i*q + msa[m][i]][j*q + msa[m][j]] += w[m];
-      }
-    }
-  }
-
-  if(!pseudocount)
-    pseudocount = 1.0/Meff;
-  for(int i = 0; i < L*q; i++) {
-    fm[i] = fm[i] / Meff + pseudocount;
-    sm[i][i] = fm[i];
-  }
-  for(int i = 0; i < L; i++) {
-    for(int j = i+1; j < L; j++) {
-      for (int a = 0; a < q; a++) {
-	for(int b = 0; b < q; b++) {
-	  sm[i*q+a][j*q+b] = sm[i*q+a][j*q+b] / Meff + pseudocount;
-	  sm[j*q+b][i*q+a] = sm[i*q+a][j*q+b];
+	for(int a = 0; a < q; a++) {
+	  for(int b = 0; b < q; b++)
+	    fprintf(fs, "%d %d %d %d %.5f %.5f\n",i, j,a,b, sm[i*q+a][j*q+b], sm_s[i*q+a][j*q+b]);
 	}
       }
     }
-  }
-  for(int i = 0; i < L*q; i++) {
-    for(int j = 0; j < L*q; j++) {
-      cov[i][j] = sm[i][j] - fm[i]*fm[j];
+    for(int i = 0; i < L; i++) {
+      for(int a = 0; a < q; a++)
+	fprintf(ff, "%i %i %.5f %.5f\n", i, a, fm[i*q+a], fm_s[i*q+a]);
     }
+    if(tm_index.size()>0) {
+      ft = fopen(file_tm, "w");
+      int i, j, k, a, b, c;
+      double aux;
+      for(int ind = 0; ind < tm_index.size(); ind++) {
+	i = tm_index[ind][0];
+	j = tm_index[ind][1];
+	k = tm_index[ind][2];
+	a = tm_index[ind][3];
+	b = tm_index[ind][4];
+	c = tm_index[ind][5]; 
+	aux = tm[ind] - sm[i*q+a][j*q+b]*fm[k*q+c] - sm[i*q+a][k*q+c]*fm[j*q+b] - sm[j*q+b][k*q+c]*fm[i*q+a] + 2*fm[i*q+a]*fm[j*q+b]*fm[k*q+c];
+	fprintf(ft, "%d %d %d %d %d %d %.5f %.5f\n", i, j, k, a, b,c, aux, tm_s[ind]);
+      }
+      fflush(ft);
+      fclose(ft);
+    }
+    fflush(fs);
+    fflush(ff);
+    fclose(fs);
+    fclose(ff);
+    return 0;
   }
-  fprintf(stdout, "Meff: %lf\n", Meff);
-  fflush(stdout);
-  return Meff;
-}
-
-int print_msa(char *filename, int ** msa, int M, int L) {
-	FILE *fp;
-	fp = fopen(filename, "w");
-
-	for(int m = 0; m < M;m++) {
-		for(int i = 0; i < L; i++)
-			fprintf(fp, "%d ", msa[m][i]);
-		fprintf(fp, "\n");
-	}
-	fflush(fp);
-	fclose(fp);
-	return 0;
-}
-
+  
+  
+  
+};
 
 
 
