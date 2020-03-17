@@ -21,7 +21,7 @@ using namespace std;
 class Params {
  public:
   char * file_msa, * file_freq, * file_w , * file_params, init, * label, * ctype, * file_3points, *file_cc, *file_samples, *file_en;
-  bool Metropolis, Gibbs, rmgauge, dgap, gapnn, phmm, blockwise, compwise;
+  bool Metropolis, Gibbs, rmgauge, dgap, gapnn, phmm, blockwise, compwise, persistent, initdata;
   double sparsity, rho, w_th,  regJ, lrateJ, lrateh, conv, pseudocount;
   int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, Nmc_config, Twait, maxiter, dec_steps;
   Params() {
@@ -44,6 +44,8 @@ class Params {
     phmm = false;
     blockwise = false;
     compwise = false;
+    persistent = false;
+    initdata = false;
     sparsity = 0;
     rho = 0.9; // RMSprop reinforcement (learn_strat = 2)
     w_th = 0.2;
@@ -67,7 +69,7 @@ class Params {
 
   int read_params (int & argc, char ** argv) {
     int c;
-    while ((c = getopt(argc, argv, "y:b:f:w:l:u:v:s:n:m:p:j:t:o:i:a:c:z:g:e:k:x:S:d:T:C:X:MGIRAhDNE:HBWq:")) != -1) {
+    while ((c = getopt(argc, argv, "y:b:f:w:l:u:v:s:n:m:p:j:t:o:i:a:c:z:g:e:k:x:S:d:T:C:X:MPQGIRAhDNE:HBWq:")) != -1) {
 		switch (c) {
 			case 'b':
 				ctype = optarg;
@@ -125,10 +127,6 @@ class Params {
 				break;
 			case 's':
 				Nmc_starts = atoi(optarg);
-				if(Nmc_starts == 1) {
-					fprintf(stderr, "You need at least 2 MC chains to check equilibration\n");
-					Nmc_starts = 2;
-				}
 				break;
 			case 'n':
 				Nmc_config = atoi(optarg);
@@ -177,6 +175,12 @@ class Params {
 				Metropolis = false;
 				Gibbs = true;
 				break;
+			case 'P':
+				persistent = true;
+				break;
+			case 'Q':
+				initdata = true;
+				break;
 			case 'R':
 				init = 'R';
 				break;
@@ -212,6 +216,8 @@ class Params {
 				fprintf(stdout, "-H : (flag) Hmmer model: profile + couplings(gap, gap) for nearest-neighbours\n");
 				fprintf(stdout, "-G : (flag) Using Gibbs sampling\n");
 				fprintf(stdout, "-M : (flag) Using Metropolis-Hastings sampling\n");
+				fprintf(stdout, "-P : (flag) Use persistent MC chains\n");
+				fprintf(stdout, "-Q : (flag) Initialize MC chains in data points\n");
 				fprintf(stdout, "-y : Seed of random number generator, default: %d\n", seed);
 				fprintf(stdout, "-s : Metropolis chains, default: %d\n", Nmc_starts);
 				fprintf(stdout, "-n : Number of MC configurations per chain, default: %d\n", Nmc_config);
@@ -237,11 +243,26 @@ class Params {
   
   void print_learning_strategy() {
     fprintf(stdout, "****** Initializing model ******\n");
+    if(Nmc_starts % 2 == 1 || Nmc_starts <=0) {
+      fprintf(stderr, "You need an even number of MC chains to check equilibration\n");
+      exit(EXIT_FAILURE);
+    }
     if(Metropolis)
       fprintf(stdout, "Performing Metropolis-Hastings MC.\nInitial sampling time: %d\nInitial equilibration time: %d\nUsing %d seeds and tot. number of points %d\n", Twait, Teq, Nmc_starts, Nmc_starts * Nmc_config);
     else if(Gibbs) {	
       fprintf(stdout, "Performing Gibbs sampling.\nInitial sampling time: %d\nInitial equilibration time: %d\nUsing %d seeds and tot. number of points %d\n", Twait, Teq, Nmc_starts, Nmc_starts * Nmc_config);
     }
+    if (initdata) {
+      fprintf(stdout, "MC chains are initialized using MSA sequences");
+    } else {
+      fprintf(stdout, "MC chains are randomly initialized");
+    }
+    if (persistent) {
+      fprintf(stdout, " only at the beginning, and are then persistent\n");
+    } else {
+      fprintf(stdout, " at the beginning of each iteration\n");
+    }
+
     fprintf(stdout, "Learning strategy: ");
     switch(learn_strat) {
     case 0:

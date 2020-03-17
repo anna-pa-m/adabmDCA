@@ -1,7 +1,4 @@
-// BOLTZMANN MACHINE CODE - version of March 5, 2020
-// TO BE DONE: 
-// -- add option for persistent chains?
-// -- add option to initialize chains in data points?
+// BOLTZMANN MACHINE CODE - version of March 13, 2020
 
 
 #include <stdio.h>
@@ -14,7 +11,6 @@
 #include <getopt.h>
 #include <stdbool.h>
 #include <iostream>
-#include <climits>
 #include "BMaux.h"
 #include "BMlib.h"
 #include "BMmc.h"
@@ -31,7 +27,7 @@ int main(int argc, char ** argv) {
   srand(params.seed ? params.seed : time(NULL));
   Data data(&params);
   params.print_learning_strategy();
-  Model model(data.q,data.L,&params,data.tm.size(),&data.tm_index);
+  Model model(data.q,data.L,&params,data.msa,data.tm.size(),&data.tm_index);
   model.initialize_parameters(data.fm);
   model.initial_decimation(data.cov);
   /* END INITIALIZATION */
@@ -51,7 +47,7 @@ int main(int argc, char ** argv) {
   Errs errs;
   while(!conv) {
     bool print_aux = false;
-    model.sample();
+    model.sample(data.msa);
     double lrav=model.update_parameters(data.fm,data.sm,iter);
     model.compute_errors(data.fm,data.sm,data.cov,errs);
     if(params.compwise && (errs.errnorm<params.conv || iter % params.dec_steps == 0)) {
@@ -95,7 +91,7 @@ int main(int argc, char ** argv) {
   /* END ITERATION LOOP */
 
   /* FINAL OPERATIONS */
-  model.sample();
+  model.sample(data.msa);
   if(data.tm.size()>0)
     model.compute_third_order_correlations();
   sc = (params.Gibbs == 0) ? 'M' : 'G';

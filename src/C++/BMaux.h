@@ -8,6 +8,7 @@
 #include <getopt.h>
 #include <stdbool.h>
 #include <vector>
+#include <climits>
 
 using namespace std;
 

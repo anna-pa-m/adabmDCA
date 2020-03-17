@@ -30,6 +30,7 @@ struct Errs {
 class Model {
  public:
   int q, L;
+  vector< vector<int> > curr_state;
   vector<double> h, Gh;
   vector< vector<double> > J, decJ, GJ;
   vector<double> fm_s;
@@ -45,8 +46,9 @@ class Model {
   vector<int> tmp_idx;
   vector<double> sorted_struct;
 
- Model(int _q, int _L, Params * _params, int _ntm, vector< vector<int> > * _tm_index):
+ Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int _ntm, vector< vector<int> > * _tm_index):
   q(_q),L(_L),h(L*q,0),J(L*q,h),decJ(L*q,h),fm_s(L*q,0),sm_s(L*q,fm_s),tm_s(_ntm,0),tm_index(_tm_index),Gibbs(false),params(_params),alpha(0.1),acc(1),counter(0),model_sp(0) {
+    init_current_state(msa);
     if (params->learn_strat == 1 || params->learn_strat == 2 || params->learn_strat == 5) {
       Gh.clear();
       Gh.resize(L*q,0);
@@ -57,6 +59,29 @@ class Model {
   }
 
   /******************** METHODS FOR INIT AND OUTPUT ***********************************************************/
+
+  void init_current_state(vector< vector<int> > & msa) {
+    curr_state.clear();
+    if (!params->initdata) {
+      vector<int> tmp(L);
+      for(int s = 0; s < params->Nmc_starts; s++) {
+	for(int i = 0; i < L; i++) {
+	  tmp[i] = (int)rand() % q;
+	}
+	curr_state.push_back(tmp);
+      }
+    } else {
+      if (msa.size() == 0) {
+	fprintf(stdout, "Empty MSA!\n");
+	exit(EXIT_FAILURE);
+      } else {
+	for(int s = 0; s < params->Nmc_starts; s++) {
+	  int i = (int)rand() % msa.size();
+	  curr_state.push_back(msa[i]);
+	}
+      }
+    }
+  }
 
   int remove_gauge_freedom(double pseudocount, vector< vector<double> > & cov) {
     vector<double> sorted_matrix(q*q,0);
@@ -287,29 +312,29 @@ class Model {
     return en;
   }
 
-  int metropolis_step(vector<int> & curr_state) {
+  int metropolis_step(vector<int> & x) {
     int i = (int)rand() % L;
     int a = (int)rand() % q;
-    while(a == curr_state[i])
+    while(a == x[i])
       a = (int)rand() %q;
-    double deltaE = -h[i*q + a] + h[i*q + curr_state[i]];
+    double deltaE = -h[i*q + a] + h[i*q + x[i]];
     for(int j = 0; j < L; j++) if(j != i) {
-	deltaE += - J[i*q + a][j*q + curr_state[j]] + J[i*q + curr_state[i]][j*q + curr_state[j]];
+	deltaE += - J[i*q + a][j*q + x[j]] + J[i*q + x[i]][j*q + x[j]];
       }
     double p = rand01();
     if (exp(-deltaE) > p) {
-      curr_state[i] = a;
+      x[i] = a;
     }
     return 0;
   }
 
-  int gibbs_step(vector<int> & curr_state) {
+  int gibbs_step(vector<int> & x) {
     double H, cum[q];
     int i = (int)rand() % L;
     for(int a = 0; a < q; a++) {
       H = -h[i*q + a];
       for(int j = 0; j < L; j++) if(j != i) {
-	  H += -J[i*q + a][j*q + curr_state[j]];
+	  H += -J[i*q + a][j*q + x[j]];
 	}
       if(a==0) cum[a]=exp(-H);
       else cum[a] = cum[a-1] + exp(-H);
@@ -317,62 +342,62 @@ class Model {
     double r = cum[q-1]*rand01();
     int a=0;
     while(r>cum[a]) {a++;}
-    curr_state[i] = a;
+    x[i] = a;
     return 0;
   }
 
-  int MC_step(vector<int> & curr_state) {
-    if (!Gibbs) {return metropolis_step(curr_state);} else {return gibbs_step(curr_state);}
+  int MC_step(vector<int> & x) {
+    if (!Gibbs) {return metropolis_step(x);} else {return gibbs_step(x);}
   }
 
-  valarray<int> mc_chain(vector<int> & curr_state1, vector<int> & curr_state2) {
+  valarray<int> mc_chain(vector<int> & x1, vector<int> & x2) {
     FILE * fp = 0, * fe = 0;
     if(params->file_samples)
       fp  = fopen(params->file_samples, "a");
     if(params->file_en)
       fe = fopen(params->file_en, "a");
     for(int t=0; t < params->Teq * L; t++) {
-      MC_step(curr_state1);
-      MC_step(curr_state2);
+      MC_step(x1);
+      MC_step(x2);
     }
     valarray<int> qs(6);
     vector<int> old_state1, old_state2, oldold_state1, oldold_state2;
-    update_statistics(curr_state1,fp,fe);        
-    update_statistics(curr_state2,fp,fe);
+    update_statistics(x1,fp,fe);        
+    update_statistics(x2,fp,fe);
     if(tm_s.size()>0) {
-      update_tm_statistics(curr_state1);
-      update_tm_statistics(curr_state2);
+      update_tm_statistics(x1);
+      update_tm_statistics(x2);
     }
-    double o12=overlap(curr_state1,curr_state2);
+    double o12=overlap(x1,x2);
     qs[0]+=o12;
     qs[1]+=(o12*o12);
     for(int n = 0; n < params->Nmc_config - 1; n++) { 
       oldold_state1=old_state1;
       oldold_state2=old_state2;
-      old_state1=curr_state1;
-      old_state2=curr_state2;
+      old_state1=x1;
+      old_state2=x2;
       for(int t=0; t < params->Twait * L; t++) {
-	MC_step(curr_state1);
-	MC_step(curr_state2);
+	MC_step(x1);
+	MC_step(x2);
       }
-      update_statistics(curr_state1,fp,fe);
-      update_statistics(curr_state2,fp,fe);
+      update_statistics(x1,fp,fe);
+      update_statistics(x2,fp,fe);
       if(tm_s.size()>0) {
-	update_tm_statistics(curr_state1);
-	update_tm_statistics(curr_state2);
+	update_tm_statistics(x1);
+	update_tm_statistics(x2);
       }
-      o12=overlap(curr_state1,curr_state2);
+      o12=overlap(x1,x2);
       qs[0]+=o12;
       qs[1]+=(o12*o12);
       if (n>0) {
-	double o1=overlap(old_state1,curr_state1);
-	double o2=overlap(old_state2,curr_state2);
+	double o1=overlap(old_state1,x1);
+	double o2=overlap(old_state2,x2);
 	qs[2]+=(o1+o2);
 	qs[3]+=(o1*o1+o2*o2);
       }
       if (n>1) {
-	double oo1=overlap(oldold_state1,curr_state1);
-	double oo2=overlap(oldold_state2,curr_state2);
+	double oo1=overlap(oldold_state1,x1);
+	double oo2=overlap(oldold_state2,x2);
 	qs[4]+=(oo1+oo2);
 	qs[5]+=(oo1*oo1+oo2*oo2);
       }
@@ -384,17 +409,12 @@ class Model {
     return qs; 
   }
 
-  int sample() {
+  int sample(vector< vector<int> > & msa) {
     init_statistics();
-    vector<int> curr_state1(L);
-    vector<int> curr_state2(L);
     valarray<int> qs(6);
+    if (!params->persistent) {init_current_state(msa);}
     for(int s = 0; s < params->Nmc_starts/2; s++) {
-      for(int i = 0; i < L; i++) {
-	curr_state1[i] = (int)rand() % q;
-	curr_state2[i] = (int)rand() % q;
-      }
-      qs+=mc_chain(curr_state1,curr_state2);
+      qs+=mc_chain(curr_state[2*s],curr_state[2*s+1]);
     } 
     double nse=params->Nmc_config*(params->Nmc_starts/2);
     double qext=qs[0]/nse;
