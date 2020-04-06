@@ -43,11 +43,12 @@ int main(int argc, char ** argv) {
   fprintf(stdout, "Printing every %d iteration(s)\n", params.nprint);
   int iter = 1;
   long in_time = time(NULL);
-  bool conv = false;
+  bool conv = (params.maxiter > 0) ? false : true;
+  bool eqmc = false;
   Errs errs;
   while(!conv) {
     bool print_aux = false;
-    model.sample(data.msa);
+    eqmc = model.sample(data.msa);
     double lrav=model.update_parameters(data.fm,data.sm,iter);
     model.compute_errors(data.fm,data.sm,data.cov,errs);
     if(params.compwise && (errs.errnorm<params.conv || iter % params.dec_steps == 0)) {
@@ -90,8 +91,16 @@ int main(int argc, char ** argv) {
   }
   /* END ITERATION LOOP */
 
-  /* FINAL OPERATIONS */
-  model.sample(data.msa);
+  fprintf(stdout, "****** Last sampling ******\n");
+  if(!params.maxiter) {
+    eqmc = false;
+    while(!eqmc) {
+      eqmc = model.sample(data.msa);
+    }
+  } else {
+    /* FINAL OPERATIONS */
+    model.sample(data.msa);
+  }
   if(data.tm.size()>0)
     model.compute_third_order_correlations();
   sc = (params.Gibbs == 0) ? 'M' : 'G';

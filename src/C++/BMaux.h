@@ -276,6 +276,12 @@ int convert_char_ising(char a){
 		case 'P':
 			i = 1;
 			break;
+		case '0':
+			i = 0;
+			break;
+		case '1':
+			i = 1;
+			break;
 		default:
 			fprintf(stderr, "%c not recognized\n", a);
 			return(EXIT_FAILURE);

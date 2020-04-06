@@ -409,7 +409,8 @@ class Model {
     return qs; 
   }
 
-  int sample(vector< vector<int> > & msa) {
+  bool sample(vector< vector<int> > & msa) {
+    bool eqmc = true;
     init_statistics();
     valarray<int> qs(6);
     if (!params->persistent) {init_current_state(msa);}
@@ -433,11 +434,13 @@ class Model {
       cout<<"Reduced equilibration time, Teq="<<params->Teq<<" Twait="<<params->Twait<<" q_ext: "<<qext<<" +- "<<dqext<<" q_int_1: "<<qin1<<" +- "<<dqin1<<" q_int_2: "<<qin2<<" +- "<<dqin2<<" Test_eq1: "<<test1<<" Test_eq2: "<<test2<<endl;
 
     } else if (!test2) {
+      eqmc = false;
       params->Twait+=1;
       params->Teq = 2*params->Twait;
       cout<<"Increased equilibration time, Teq="<<params->Teq<<" Twait="<<params->Twait<<" q_ext: "<<qext<<" +- "<<dqext<<" q_int_1: "<<qin1<<" +- "<<dqin1<<" q_int_2: "<<qin2<<" +- "<<dqin2<<" Test_eq1: "<<test1<<" Test_eq2: "<<test2<<endl;
     }
-    return 0;
+   
+    return eqmc;
   }
 
 
