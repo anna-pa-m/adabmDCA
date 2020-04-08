@@ -83,7 +83,7 @@ class Model {
     }
   }
 
-  int remove_gauge_freedom(double pseudocount, vector< vector<double> > & cov) {
+  int remove_gauge_freedom(vector< vector<double> > & cov) {
     vector<double> sorted_matrix(q*q,0);
     vector<int> mapping(q*q);
     int idx_aux[q*q][2];
@@ -96,7 +96,7 @@ class Model {
 	    mapping[k] = k;
 	    idx_aux[k][0] = a;
 	    idx_aux[k][1] = b;
-	    sorted_matrix[k] = fabs(cov[i*q+a][j*q+b]) + pseudocount * 0.001 * rand01();
+	    sorted_matrix[k] = fabs(cov[i*q+a][j*q+b]) + 1e-8 * rand01();
 	    k += 1;
 	  }
 	}
@@ -173,7 +173,6 @@ class Model {
       switch(params->init) {
       case 'R':
 	fprintf(stdout, "Zero-parameters initialization...done\n");
-	fflush(stdout);
 	break;
       case 'I':
 	fprintf(stdout, "Initializing parameters using independent sites approximation...");
@@ -189,7 +188,6 @@ class Model {
 	    h[i*q+a] -= mean_all;
 	}
 	fprintf(stdout, "done\n");
-	fflush(stdout);
       }
     }
     return 0;
@@ -242,7 +240,7 @@ class Model {
 	  }
 	}
       }
-      if(params->rmgauge) remove_gauge_freedom(params->pseudocount,cov);
+      if(params->rmgauge) remove_gauge_freedom(cov);
     } else {
       fprintf(stdout, "Reading interaction graph from input file...");
       FILE *filep;
@@ -409,8 +407,7 @@ class Model {
     return qs; 
   }
 
-  bool sample(vector< vector<int> > & msa) {
-    bool eqmc = true;
+  int sample(vector< vector<int> > & msa) {
     init_statistics();
     valarray<int> qs(6);
     if (!params->persistent) {init_current_state(msa);}
@@ -434,13 +431,11 @@ class Model {
       cout<<"Reduced equilibration time, Teq="<<params->Teq<<" Twait="<<params->Twait<<" q_ext: "<<qext<<" +- "<<dqext<<" q_int_1: "<<qin1<<" +- "<<dqin1<<" q_int_2: "<<qin2<<" +- "<<dqin2<<" Test_eq1: "<<test1<<" Test_eq2: "<<test2<<endl;
 
     } else if (!test2) {
-      eqmc = false;
       params->Twait+=1;
       params->Teq = 2*params->Twait;
       cout<<"Increased equilibration time, Teq="<<params->Teq<<" Twait="<<params->Twait<<" q_ext: "<<qext<<" +- "<<dqext<<" q_int_1: "<<qin1<<" +- "<<dqin1<<" q_int_2: "<<qin2<<" +- "<<dqin2<<" Test_eq1: "<<test1<<" Test_eq2: "<<test2<<endl;
     }
-   
-    return eqmc;
+    return 0;
   }
 
 
@@ -579,10 +574,6 @@ class Model {
 
   /******************** METHODS FOR LEARNING ***********************************************************/
 
-  int n_links() {
-    return (int)((1.0 - model_sp) * (L*(L-1)/2)*q*q);
-  }
-
   double update_parameters(vector<double> & fm, vector< vector<double> > & sm, int iter) {
     if (params->learn_strat != 5) {
       double lrav=0;
@@ -683,6 +674,10 @@ class Model {
 
   /******************** METHODS FOR DECIMATION ***********************************************************/
 
+  int n_links() {
+    return (int)((1.0 - model_sp) * (L*(L-1)/2)*q*q);
+  }
+
   void init_decimation_variables() {
     if(params->sparsity > 0 || params->compwise || params->blockwise) {
       int n = L*(L-1)*q*q/2;
@@ -727,7 +722,7 @@ class Model {
       b = idx[k][3];
       if(decJ[i*q + a][j*q + b] > 0) {
 	m += 1;
-	double auxsm = sm_s[i*q+a][j*q+b] == 0 ? params->pseudocount : sm_s[i*q+a][j*q+b];
+	double auxsm = sm_s[i*q+a][j*q+b] == 0 ? 1e-8 : sm_s[i*q+a][j*q+b];
 	sorted_struct[k] = J[i*q+a][j*q+b]*auxsm - (J[i*q+a][j*q+b]*exp(-J[i*q+a][j*q+b])*auxsm)/(exp(-J[i*q+a][j*q+b])*auxsm+1-auxsm);
 	maxsdkl = max(maxsdkl, sorted_struct[k]);
 	fprintf(fileout, "J %i %i %i %i %.2e %f %f\n", i, j, a, b, sorted_struct[k], J[i*q+a][j*q+b], sm_s[i*q+a][j*q+b]);

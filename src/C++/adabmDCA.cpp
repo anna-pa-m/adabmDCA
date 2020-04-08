@@ -41,22 +41,16 @@ int main(int argc, char ** argv) {
   char par[1000];
   char sc;
   fprintf(stdout, "Printing every %d iteration(s)\n", params.nprint);
-  int iter = 1;
+  fflush(stdout);
+  int iter = 0;
   long in_time = time(NULL);
-  bool conv = (params.maxiter > 0) ? false : true;
-  bool eqmc = false;
+  bool conv = false;
   Errs errs;
+  double lrav=params.lrateJ;
   while(!conv) {
     bool print_aux = false;
-    eqmc = model.sample(data.msa);
-    double lrav=model.update_parameters(data.fm,data.sm,iter);
+    model.sample(data.msa);
     model.compute_errors(data.fm,data.sm,data.cov,errs);
-    if(params.compwise && (errs.errnorm<params.conv || iter % params.dec_steps == 0)) {
-      fprintf(stdout,"Decimating..");
-      int aux = ceil( model.n_links() / 100);
-      model.decimate_compwise(aux,iter);
-      print_aux = true;
-    }
     if(iter % params.nprint == 0) {
       fprintf(stdout, "it: %i el_time: %li N: %i Teq: %i Twait: %i merr_fm: %.1e merr_sm: %.1e averr_fm: %.1e averr_sm: %.1e cov_err: %.1e corr: %.2f sp: %.1e lrav: %.1e\n", iter, time(NULL)-in_time, params.Nmc_config * params.Nmc_starts, params.Teq, params.Twait, errs.merrh, errs.merrJ, errs.averrh, errs.averrJ, errs.errnorm, model.pearson(data.cov), model.model_sp, lrav);
       fflush(stdout);
@@ -75,6 +69,13 @@ int main(int argc, char ** argv) {
 	model.compute_third_order_correlations();
       data.print_statistics(sec, first, third, model.fm_s, model.sm_s, model.tm_s);
     }
+    lrav=model.update_parameters(data.fm,data.sm,iter);
+    if(params.compwise && (errs.errnorm<params.conv || iter % params.dec_steps == 0)) {
+      fprintf(stdout,"Decimating..");
+      int aux = ceil( model.n_links() / 100);
+      model.decimate_compwise(aux,iter);
+      print_aux = true;
+    }
     if(errs.errnorm<params.conv && !params.compwise) {
       conv = true;
       fprintf(stdout,"Reached convergence of error, end of learning\n");
@@ -91,16 +92,8 @@ int main(int argc, char ** argv) {
   }
   /* END ITERATION LOOP */
 
-  fprintf(stdout, "****** Last sampling ******\n");
-  if(!params.maxiter) {
-    eqmc = false;
-    while(!eqmc) {
-      eqmc = model.sample(data.msa);
-    }
-  } else {
-    /* FINAL OPERATIONS */
-    model.sample(data.msa);
-  }
+  /* FINAL OPERATIONS */
+  model.sample(data.msa);
   if(data.tm.size()>0)
     model.compute_third_order_correlations();
   sc = (params.Gibbs == 0) ? 'M' : 'G';

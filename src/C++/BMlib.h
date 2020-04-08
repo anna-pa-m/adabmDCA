@@ -473,18 +473,17 @@ class Data {
 	}
       }
     }
-    
     if(!params->pseudocount)
-      params->pseudocount = 1.0/Meff;
+      params->pseudocount = 1.0/(1+Meff);
     for(int i = 0; i < L*q; i++) {
-      fm[i] = fm[i] / Meff + params->pseudocount;
+      fm[i] = (1-params->pseudocount)*fm[i]/Meff + params->pseudocount/q;
       sm[i][i] = fm[i];
     }
     for(int i = 0; i < L; i++) {
       for(int j = i+1; j < L; j++) {
 	for (int a = 0; a < q; a++) {
 	  for(int b = 0; b < q; b++) {
-	    sm[i*q+a][j*q+b] = sm[i*q+a][j*q+b] / Meff + params->pseudocount;
+	    sm[i*q+a][j*q+b] = (1-params->pseudocount)*sm[i*q+a][j*q+b]/Meff + params->pseudocount/(q*q);
 	    sm[j*q+b][i*q+a] = sm[i*q+a][j*q+b];
 	  }
 	}
