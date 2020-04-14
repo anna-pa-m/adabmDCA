@@ -407,7 +407,7 @@ class Model {
     return qs; 
   }
 
-  int sample(vector< vector<int> > & msa) {
+  bool sample(vector< vector<int> > & msa) {
     bool eqmc = true;
     init_statistics();
     valarray<int> qs(6);

@@ -44,7 +44,7 @@ int main(int argc, char ** argv) {
   fflush(stdout);
   int iter = 0;
   long in_time = time(NULL);
-  bool conv = false;
+  bool conv = (params.maxiter > 0) ?  false : true;
   Errs errs;
   double lrav=params.lrateJ;
   bool eqmc = false;
@@ -105,7 +105,6 @@ int main(int argc, char ** argv) {
   }
   /* FINAL OPERATIONS */
 
-  model.sample(data.msa);
   if(data.tm.size()>0)
     model.compute_third_order_correlations();
   sc = (params.Gibbs == 0) ? 'M' : 'G';
