@@ -33,21 +33,22 @@ int main(int argc, char ** argv) {
   /* END INITIALIZATION */
 
   /* START ITERATION LOOP */
-  fprintf(stdout, "****** Starting learning loop ******\n");
   char score[1000];
   char sec[1000];
   char first[1000];
   char third[1000];
   char par[1000];
   char sc;
-  fprintf(stdout, "Printing every %d iteration(s)\n", params.nprint);
-  fflush(stdout);
   int iter = 0;
   long in_time = time(NULL);
   bool conv = (params.maxiter > 0) ?  false : true;
   Errs errs;
   double lrav=params.lrateJ;
-  bool eqmc = false;
+  if (!conv) {
+    fprintf(stdout, "****** Starting learning loop ******\n");
+    fprintf(stdout, "Printing every %d iteration(s)\n", params.nprint);
+    fflush(stdout);
+  }
   while(!conv) {
     bool print_aux = false;
     model.sample(data.msa);
@@ -93,14 +94,18 @@ int main(int argc, char ** argv) {
   }
   /* END ITERATION LOOP */
 
+  /* FINAL OPERATIONS */
   fprintf(stdout, "****** Last sampling ******\n");
+  fflush(stdout);
   if(!params.maxiter) {
-    eqmc = false;
+    bool eqmc = false;
     while(!eqmc) {
       eqmc = model.sample(data.msa);
+      model.compute_errors(data.fm,data.sm,data.cov,errs);
+      fprintf(stdout, "N: %i Teq: %i Twait: %i merr_fm: %.1e merr_sm: %.1e averr_fm: %.1e averr_sm: %.1e cov_err: %.1e corr: %.2f \n", params.Nmc_config * params.Nmc_starts, params.Teq, params.Twait, errs.merrh, errs.merrJ, errs.averrh, errs.averrJ, errs.errnorm, model.pearson(data.cov));
+      fflush(stdout);
     }
   } else {
-    /* FINAL OPERATIONS */
     model.sample(data.msa);
   }
   /* FINAL OPERATIONS */
