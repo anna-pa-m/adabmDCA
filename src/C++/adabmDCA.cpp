@@ -47,6 +47,7 @@ int main(int argc, char ** argv) {
   bool conv = false;
   Errs errs;
   double lrav=params.lrateJ;
+  bool eqmc = false;
   while(!conv) {
     bool print_aux = false;
     model.sample(data.msa);
@@ -92,7 +93,18 @@ int main(int argc, char ** argv) {
   }
   /* END ITERATION LOOP */
 
+  fprintf(stdout, "****** Last sampling ******\n");
+  if(!params.maxiter) {
+    eqmc = false;
+    while(!eqmc) {
+      eqmc = model.sample(data.msa);
+    }
+  } else {
+    /* FINAL OPERATIONS */
+    model.sample(data.msa);
+  }
   /* FINAL OPERATIONS */
+
   model.sample(data.msa);
   if(data.tm.size()>0)
     model.compute_third_order_correlations();

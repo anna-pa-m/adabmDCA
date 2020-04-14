@@ -270,10 +270,16 @@ int convert_char_epi(char a) {
 int convert_char_ising(char a){
 	int i;
 	switch(a) {
+		case '0':
+			i = 0;
+			break;
 		case 'A':
 			i = 0;
 			break;
 		case 'P':
+			i = 1;
+			break;
+		case '1':
 			i = 1;
 			break;
 		default:
