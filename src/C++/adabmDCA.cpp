@@ -55,7 +55,7 @@ int main(int argc, char ** argv) {
       fprintf(stdout, "it: %i el_time: %li N: %i Teq: %i Twait: %i merr_fm: %.1e merr_sm: %.1e averr_fm: %.1e averr_sm: %.1e cov_err: %.1e corr: %.2f sp: %.1e lrav: %.1e\n", iter, time(NULL)-in_time, params.Nmc_config * params.Nmc_starts, params.Teq, params.Twait, errs.merrh, errs.merrJ, errs.averrh, errs.averrJ, errs.errnorm, model.pearson(data.cov), model.model_sp, lrav);
       fflush(stdout);
     }
-    if(iter % params.nprintfile == 0 || print_aux) {
+    if(iter > 0 && (iter % params.nprintfile == 0 || print_aux)) {
       sc = (params.Gibbs == 0) ? 'M' : 'G';
       sprintf(par, "Parameters_tmp_%d_zerosum_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
       sprintf(score, "Score_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
@@ -70,7 +70,7 @@ int main(int argc, char ** argv) {
       data.print_statistics(sec, first, third, model.fm_s, model.sm_s, model.tm_s);
     }
     lrav=model.update_parameters(data.fm,data.sm,iter);
-    if(params.compwise && (errs.errnorm<params.conv || iter % params.dec_steps == 0)) {
+    if(iter > 0 && params.compwise && (errs.errnorm<params.conv || iter % params.dec_steps == 0)) {
       fprintf(stdout,"Decimating..");
       int aux = ceil( model.n_links() / 100);
       model.decimate_compwise(aux,iter);
