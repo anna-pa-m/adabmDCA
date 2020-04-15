@@ -33,12 +33,12 @@ int main(int argc, char ** argv) {
   /* END INITIALIZATION */
 
   /* START ITERATION LOOP */
-  char score[1000];
-  char sec[1000];
-  char first[1000];
-  char third[1000];
   char par[1000];
-  char sc;
+  char par_zsum[1000];
+  char score[1000];
+  char first[1000];
+  char sec[1000];
+  char third[1000];
   int iter = 0;
   long in_time = time(NULL);
   bool conv = (params.maxiter > 0) ?  false : true;
@@ -58,15 +58,9 @@ int main(int argc, char ** argv) {
       fflush(stdout);
     }
     if(iter > 0 && (iter % params.nprintfile == 0 || print_aux)) {
-      sc = (params.Gibbs == 0) ? 'M' : 'G';
-      sprintf(par, "Parameters_tmp_%d_zerosum_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
-      sprintf(score, "Score_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
-      print_frobenius_norms(model.h,model.J,model.L,model.q,score,par);
-      sprintf(par, "Parameters_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
+      params.construct_filenames(iter, conv, par, par_zsum, score, first, sec, third);
+      print_frobenius_norms(model.h,model.J,model.L,model.q,score,par_zsum);
       model.print_model(par);
-      sprintf(sec, "Sec_mom_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
-      sprintf(first, "First_mom_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
-      sprintf(third, "Third_mom_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
       if(data.tm.size()>0)
 	model.compute_third_order_correlations();
       data.print_statistics(sec, first, third, model.fm_s, model.sm_s, model.tm_s);
@@ -95,7 +89,7 @@ int main(int argc, char ** argv) {
   /* END ITERATION LOOP */
 
   /* FINAL OPERATIONS */
-  fprintf(stdout, "****** Last sampling ******\n");
+  fprintf(stdout, "****** Final sampling ******\n");
   fflush(stdout);
   if(!params.maxiter) {
     bool eqmc = false;
@@ -108,20 +102,17 @@ int main(int argc, char ** argv) {
   } else {
     model.sample(data.msa);
   }
-  /* FINAL OPERATIONS */
 
+  params.construct_filenames(iter, conv, par, par_zsum, score, first, sec, third);
+  print_frobenius_norms(model.h,model.J,model.L,model.q,score, par_zsum);
+  model.print_model(par);
   if(data.tm.size()>0)
     model.compute_third_order_correlations();
-  sc = (params.Gibbs == 0) ? 'M' : 'G';
-  sprintf(par, "Parameters_conv_zerosum_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
-  sprintf(score, "Score_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat",params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
-  print_frobenius_norms(model.h,model.J,model.L,model.q,score, par);
-  sprintf(sec, "Sec_mom_conv_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
-  sprintf(first, "First_mom_conv_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
-  sprintf(third, "Third_order_connected_corr_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
   data.print_statistics(sec, first, third, model.fm_s, model.sm_s, model.tm_s);
-  sprintf(par, "Parameters_conv_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", params.label, sc, params.init, params.lrateJ, params.lrateh, params.learn_strat);
-  model.print_model(par);
+  fprintf(stdout, "****** Execution completed ******\n");
+  fflush(stdout);
+  /* FINAL OPERATIONS */
+
   return 0;
 
 }

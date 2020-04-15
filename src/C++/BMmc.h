@@ -127,7 +127,7 @@ class Model {
 	exit(EXIT_FAILURE);
     }
     if(params->file_params) {
-      fprintf(stdout, "Reading input parameters from file...");
+      fprintf(stdout, "Reading input parameters from %s ...", params->file_params);
       FILE *filep;
       if(!(filep = fopen(params->file_params, "r"))) {
 	fprintf(stderr, "File %s not found\n", params->file_params);

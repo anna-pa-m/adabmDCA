@@ -21,7 +21,7 @@ using namespace std;
 class Params {
  public:
   char * file_msa, * file_freq, * file_w , * file_params, init, * label, * ctype, * file_3points, *file_cc, *file_samples, *file_en;
-  bool Metropolis, Gibbs, rmgauge, dgap, gapnn, phmm, blockwise, compwise, persistent, initdata;
+  bool Metropolis, Gibbs, rmgauge, dgap, gapnn, phmm, blockwise, compwise, persistent, initdata, overwrite;
   double sparsity, rho, w_th,  regJ, lrateJ, lrateh, conv, pseudocount;
   int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, Nmc_config, Twait, maxiter, dec_steps;
   Params() {
@@ -46,6 +46,7 @@ class Params {
     compwise = false;
     persistent = false;
     initdata = false;
+    overwrite = true;
     sparsity = 0;
     rho = 0.9; // RMSprop reinforcement (learn_strat = 2)
     w_th = 0.2;
@@ -69,7 +70,7 @@ class Params {
 
   int read_params (int & argc, char ** argv) {
     int c;
-    while ((c = getopt(argc, argv, "y:b:f:w:l:u:v:s:n:m:p:j:t:o:i:a:c:z:g:e:k:x:S:d:T:C:X:MPQGIRAhDNE:HBWq:")) != -1) {
+    while ((c = getopt(argc, argv, "y:b:f:w:l:u:v:s:n:m:p:j:t:o:i:a:c:z:g:e:k:x:S:d:T:C:X:MPQGIRAhDNFE:HBWq:")) != -1) {
 		switch (c) {
 			case 'b':
 				ctype = optarg;
@@ -161,6 +162,9 @@ class Params {
 			case 'm':
 				nprintfile = atoi(optarg);
 				break;
+			case 'F':
+				overwrite = false;
+				break;
 			case 'g':
 				regJ = atof(optarg);
 				break;
@@ -228,6 +232,7 @@ class Params {
 				fprintf(stdout, "-i : Maximum number of iterations, default: %d\n", maxiter);
 				fprintf(stdout, "-z : Print output every x iterations, default: %d\n", nprint);
 				fprintf(stdout, "-m : Print Frobenius norms and parameters every x iterations, default: %d\n", nprintfile);
+				fprintf(stdout, "-F : (flag) Do not overwrite temporary output\n");
 				fprintf(stdout, "-u : Learning rate for couplings, default: %.e\n", lrateJ);
 				fprintf(stdout, "-v : Learning rate for fields, default: %.e\n", lrateh);
 				fprintf(stdout, "-a : Learning strategy.\n \t0: standard gradient descent\n \t1: adagrad\n \t2. RMSprop\n \t3. search then converge\n \t4. adam (currently not implemented)\n \t5. FIRE\n \tDefault: %d\n", learn_strat);
@@ -314,7 +319,34 @@ class Params {
       fprintf(stdout, "Using pseudo-count: %1.e\n", pseudocount);
 
   }
-  
+
+  void construct_filenames(int iter, bool conv, char * par, char * par_zsum, char * score, char * first, char * sec, char * third) {
+      char sc = (Gibbs == 0) ? 'M' : 'G';
+      if (!conv) {
+	if (overwrite) {
+	  sprintf(par, "Parameters_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
+	  sprintf(par_zsum, "Parameters_tmp_zerosum_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
+	  sprintf(score, "Score_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
+	  sprintf(first, "First_mom_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
+	  sprintf(sec, "Sec_mom_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
+	  sprintf(third, "Third_mom_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
+	} else {
+	  sprintf(par, "Parameters_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, label, sc, init, lrateJ, lrateh, learn_strat);
+	  sprintf(par_zsum, "Parameters_tmp_%d_zerosum_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, label, sc, init, lrateJ, lrateh, learn_strat);
+	  sprintf(score, "Score_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, label, sc, init, lrateJ, lrateh, learn_strat);
+	  sprintf(first, "First_mom_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, label, sc, init, lrateJ, lrateh, learn_strat);
+	  sprintf(sec, "Sec_mom_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, label, sc, init, lrateJ, lrateh, learn_strat);
+	  sprintf(third, "Third_mom_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, label, sc, init, lrateJ, lrateh, learn_strat);
+	}
+      } else {
+	sprintf(par, "Parameters_conv_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
+	sprintf(par_zsum, "Parameters_conv_zerosum_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
+	sprintf(score, "Score_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat",label, sc, init, lrateJ, lrateh, learn_strat);
+	sprintf(first, "First_mom_conv_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
+	sprintf(sec, "Sec_mom_conv_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
+	sprintf(third, "Third_order_connected_corr_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
+      }
+  }
   
 };
 
@@ -634,7 +666,7 @@ class Data {
       for(int j = i+1; j < L; j++) {
 	for(int a = 0; a < q; a++) {
 	  for(int b = 0; b < q; b++)
-	    fprintf(fs, "%d %d %d %d %.5f %.5f\n",i, j,a,b, sm[i*q+a][j*q+b], sm_s[i*q+a][j*q+b]);
+	    fprintf(fs, "%d %d %d %d %.5f %.5f %.5f %.5f\n",i, j,a,b, sm[i*q+a][j*q+b], sm_s[i*q+a][j*q+b], cov[i*q+a][j*q+b], sm_s[i*q+a][j*q+b]-fm_s[i*q+a]*fm_s[j*q+b]);
 	}
       }
     }
