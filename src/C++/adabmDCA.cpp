@@ -46,7 +46,7 @@ int main(int argc, char ** argv) {
   double lrav=params.lrateJ;
   if (!conv) {
     fprintf(stdout, "****** Starting learning loop ******\n");
-    fprintf(stdout, "Printing every %d iteration(s)\n", params.nprint);
+    fprintf(stdout, "Printing output every %d iteration(s) - prameters every %d iterations\n", params.nprint, params.nprintfile);
     fflush(stdout);
   }
   while(!conv) {

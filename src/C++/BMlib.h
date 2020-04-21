@@ -21,8 +21,8 @@ using namespace std;
 class Params {
  public:
   char * file_msa, * file_freq, * file_w , * file_params, init, * label, * ctype, * file_3points, *file_cc, *file_samples, *file_en;
-  bool Metropolis, Gibbs, rmgauge, dgap, gapnn, phmm, blockwise, compwise, persistent, initdata, overwrite;
-  double sparsity, rho, w_th,  regJ, lrateJ, lrateh, conv, pseudocount;
+  bool Metropolis, Gibbs, rmgauge, dgap, gapnn, phmm, blockwise, compwise, persistent, initdata, overwrite, adapt;
+  double sparsity, rho, w_th,  regJ1, regJ2, lrateJ, lrateh, conv, pseudocount;
   int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, Nmc_config, Twait, maxiter, dec_steps;
   Params() {
     file_msa = 0;
@@ -47,10 +47,12 @@ class Params {
     persistent = false;
     initdata = false;
     overwrite = true;
+    adapt = true;
     sparsity = 0;
     rho = 0.9; // RMSprop reinforcement (learn_strat = 2)
     w_th = 0.2;
-    regJ = 0.0;
+    regJ1 = 0.0;
+    regJ2 = 0.0;
     lrateJ = 5e-2;
     lrateh = 5e-2;
     conv = 8e-3;
@@ -70,7 +72,7 @@ class Params {
 
   int read_params (int & argc, char ** argv) {
     int c;
-    while ((c = getopt(argc, argv, "y:b:f:w:l:u:v:s:n:m:p:j:t:o:i:a:c:z:g:e:k:x:S:d:T:C:X:MPQGIRAhDNFE:HBWq:")) != -1) {
+    while ((c = getopt(argc, argv, "a:b:c:d:e:f:g:hi:j:k:l:m:n:o:p:q:r:s:t:u:v:w:x:y:z:ABC:DE:FGHILMNPQRS:T:WX:")) != -1) {
 		switch (c) {
 			case 'b':
 				ctype = optarg;
@@ -166,10 +168,16 @@ class Params {
 				overwrite = false;
 				break;
 			case 'g':
-				regJ = atof(optarg);
+				regJ1 = atof(optarg);
+				break;
+			case 'r':
+				regJ2 = atof(optarg);
 				break;
 			case 'A':
 				rmgauge = true;
+				break;
+			case 'L':
+				adapt = false;
 				break;
 			case 'M':
 			 	Metropolis = true;
@@ -206,7 +214,8 @@ class Params {
 				fprintf(stdout, "-T : (optional file) (i j k a b c) indices for third order correlations\n");
 				fprintf(stdout, "-C : (optional file) (i j a b) or (i j a b corr) input file for interaction graph \n");
 				fprintf(stdout, "-l : Threshold for computing weigts, default: %.1f\n", w_th);
-				fprintf(stdout, "-g : L1 Regularization (J parameters), default :%.3e\n", regJ);
+				fprintf(stdout, "-g : L1 Regularization (J parameters), default :%.3e\n", regJ1);
+				fprintf(stdout, "-r : L2 Regularization (J parameters), default :%.3e\n", regJ2);
 				fprintf(stdout, "-k : Label used in output files\n");
 				fprintf(stdout, "-x : Required sparsity. Add -B for block-wise decimation or -W for component-wise decimation\n");
 				fprintf(stdout, "-X : Decimate every x steps even if not converged (default: infinite)\n");
@@ -229,6 +238,7 @@ class Params {
 				fprintf(stdout, "-c : Convergence tolerance, default: %.3e\n", conv);
 				fprintf(stdout, "-e : Initial MC equilibration time (in MCsweeps), default: 20 \n");
 				fprintf(stdout, "-t : Initial sampling time of MC algorithm (in MCsweeps), default: 10 \n");
+				fprintf(stdout, "-L : (flag) Do not adapt Teq and Twait to achieve equilibration\n");
 				fprintf(stdout, "-i : Maximum number of iterations, default: %d\n", maxiter);
 				fprintf(stdout, "-z : Print output every x iterations, default: %d\n", nprint);
 				fprintf(stdout, "-m : Print Frobenius norms and parameters every x iterations, default: %d\n", nprintfile);
@@ -252,11 +262,17 @@ class Params {
       fprintf(stderr, "You need an even number of MC chains to check equilibration\n");
       exit(EXIT_FAILURE);
     }
-    if(Metropolis)
-      fprintf(stdout, "Performing Metropolis-Hastings MC.\nInitial sampling time: %d\nInitial equilibration time: %d\nUsing %d seeds and tot. number of points %d\n", Twait, Teq, Nmc_starts, Nmc_starts * Nmc_config);
-    else if(Gibbs) {	
-      fprintf(stdout, "Performing Gibbs sampling.\nInitial sampling time: %d\nInitial equilibration time: %d\nUsing %d seeds and tot. number of points %d\n", Twait, Teq, Nmc_starts, Nmc_starts * Nmc_config);
+    if(Metropolis) {
+      fprintf(stdout, "Performing Metropolis-Hastings MC\n");
+    } else if(Gibbs) {	
+      fprintf(stdout, "Performing Gibbs sampling\n");
     }
+    if (adapt) {
+      fprintf(stdout, "Adaptative sampling time. Initial values: %d\nInitial equilibration time: %d\n", Twait, Teq);
+    } else {
+      fprintf(stdout, "Fixed sampling time: %d\nInitial equilibration time: %d\n", Twait, Teq);
+    }
+    fprintf(stdout, "Using %d seeds and tot. number of points %d\n", Nmc_starts, Nmc_starts * Nmc_config);
     if (initdata) {
       fprintf(stdout, "MC chains are initialized using MSA sequences");
     } else {
@@ -291,8 +307,8 @@ class Params {
       break;
     }
     if(sparsity > 0.0) {
-      if (regJ != 0.0) {
-	fprintf(stdout, "L1 regularization is not compatible with sparsification\n");
+      if (regJ1 != 0.0 || regJ2 != 0.0) {
+	fprintf(stdout, "Regularization is not compatible with sparsification because of gauge choice conflicts\n");
 	exit(1);
       }
       fprintf(stdout, "Required sparsity %.3f", sparsity);
@@ -313,8 +329,10 @@ class Params {
       else
 	fprintf(stdout, " every at most %d steps\n", dec_steps);
     }
-    if(regJ > 0)
-      fprintf(stdout, "L1 regularization on couplings: lambda %.1e\n", regJ);
+    if(regJ1 > 0)
+      fprintf(stdout, "L1 regularization on couplings: lambda %.1e\n", regJ1);
+    if(regJ2 > 0)
+      fprintf(stdout, "L2 regularization on couplings: lambda %.1e\n", regJ2);
     if(pseudocount)
       fprintf(stdout, "Using pseudo-count: %1.e\n", pseudocount);
 

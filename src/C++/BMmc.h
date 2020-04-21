@@ -310,7 +310,7 @@ class Model {
     return en;
   }
 
-  int metropolis_step(vector<int> & x) {
+  void metropolis_step(vector<int> & x) {
     int i = (int)rand() % L;
     int a = (int)rand() % q;
     while(a == x[i])
@@ -323,10 +323,9 @@ class Model {
     if (exp(-deltaE) > p) {
       x[i] = a;
     }
-    return 0;
   }
 
-  int gibbs_step(vector<int> & x) {
+  void gibbs_step(vector<int> & x) {
     double H, cum[q];
     int i = (int)rand() % L;
     for(int a = 0; a < q; a++) {
@@ -341,22 +340,25 @@ class Model {
     int a=0;
     while(r>cum[a]) {a++;}
     x[i] = a;
-    return 0;
   }
 
-  int MC_step(vector<int> & x) {
-    if (!Gibbs) {return metropolis_step(x);} else {return gibbs_step(x);}
+  void MC_sweep(vector<int> & x) {
+    if (!Gibbs) {
+      for (int i=0;i<L;i++) metropolis_step(x);
+    } else {
+      for (int i=0;i<L;i++) gibbs_step(x);
+    }
   }
 
-  valarray<int> mc_chain(vector<int> & x1, vector<int> & x2) {
+  valarray<int> mc_chain(vector<int> & x1, vector<int> & x2, valarray<double> & corr) {
     FILE * fp = 0, * fe = 0;
     if(params->file_samples)
       fp  = fopen(params->file_samples, "a");
     if(params->file_en)
       fe = fopen(params->file_en, "a");
-    for(int t=0; t < params->Teq * L; t++) {
-      MC_step(x1);
-      MC_step(x2);
+    for(int t=0; t < params->Teq; t++) {
+      MC_sweep(x1);
+      MC_sweep(x2);
     }
     valarray<int> qs(6);
     vector<int> old_state1, old_state2, oldold_state1, oldold_state2;
@@ -369,14 +371,16 @@ class Model {
     double o12=overlap(x1,x2);
     qs[0]+=o12;
     qs[1]+=(o12*o12);
+    vector<int> x1i=x1, x2i=x2;
     for(int n = 0; n < params->Nmc_config - 1; n++) { 
       oldold_state1=old_state1;
       oldold_state2=old_state2;
       old_state1=x1;
       old_state2=x2;
-      for(int t=0; t < params->Twait * L; t++) {
-	MC_step(x1);
-	MC_step(x2);
+      for(int t=0; t < params->Twait; t++) {
+	corr[n*params->Twait+t]+=(overlap(x1,x1i)+overlap(x2,x2i));
+	MC_sweep(x1);
+	MC_sweep(x2);
       }
       update_statistics(x1,fp,fe);
       update_statistics(x2,fp,fe);
@@ -387,13 +391,11 @@ class Model {
       o12=overlap(x1,x2);
       qs[0]+=o12;
       qs[1]+=(o12*o12);
+      double o1=overlap(old_state1,x1);
+      double o2=overlap(old_state2,x2);
+      qs[2]+=(o1+o2);
+      qs[3]+=(o1*o1+o2*o2);
       if (n>0) {
-	double o1=overlap(old_state1,x1);
-	double o2=overlap(old_state2,x2);
-	qs[2]+=(o1+o2);
-	qs[3]+=(o1*o1+o2*o2);
-      }
-      if (n>1) {
 	double oo1=overlap(oldold_state1,x1);
 	double oo2=overlap(oldold_state2,x2);
 	qs[4]+=(oo1+oo2);
@@ -411,10 +413,19 @@ class Model {
     bool eqmc = true;
     init_statistics();
     valarray<int> qs(6);
+    valarray<double> corr(0.,(params->Nmc_config-1)*params->Twait);
     if (!params->persistent) {init_current_state(msa);}
     for(int s = 0; s < params->Nmc_starts/2; s++) {
-      qs+=mc_chain(curr_state[2*s],curr_state[2*s+1]);
+      qs+=mc_chain(curr_state[2*s],curr_state[2*s+1],corr);
     } 
+    corr/=params->Nmc_starts;
+    char filename_aux[1000];
+    sprintf(filename_aux, "corr_%s.dat", params->label);
+    FILE *fileout = fopen(filename_aux,"w");
+    for (int i=0;i<corr.size();i++) {
+      fprintf(fileout, "%i %f\n", i, corr[i]);
+    }
+    fclose(fileout);
     double nse=params->Nmc_config*(params->Nmc_starts/2);
     double qext=qs[0]/nse;
     double dqext=sqrt(qs[1]/(nse-1)-qs[0]*qs[0]/nse/(nse-1))/sqrt(nse);
@@ -426,20 +437,19 @@ class Model {
     double dqin2=nsi2>1 ? sqrt(qs[5]/(nsi2-1)-qs[4]*qs[4]/nsi2/(nsi2-1))/sqrt(nsi2) : 0;
     int test1=(abs(qext-qin1)<3*sqrt(dqext*dqext+dqin1*dqin1) ? 1 : 0);
     int test2=(abs(qext-qin2)<3*sqrt(dqext*dqext+dqin2*dqin2) ? 1 : 0);
-    if (test1) {
-      if (params->Twait > 1) params->Twait-=1;
-      params->Teq = 2*params->Twait;
-      cout<<"Reduced equilibration time, Teq="<<params->Teq<<" Twait="<<params->Twait<<" q_ext: "<<qext<<" +- "<<dqext<<" q_int_1: "<<qin1<<" +- "<<dqin1<<" q_int_2: "<<qin2<<" +- "<<dqin2<<" Test_eq1: "<<test1<<" Test_eq2: "<<test2<<endl;
-
-    } else if (!test2) {
-      eqmc = false;
-      params->Twait+=1;
-      params->Teq = 2*params->Twait;
-      cout<<"Increased equilibration time, Teq="<<params->Teq<<" Twait="<<params->Twait<<" q_ext: "<<qext<<" +- "<<dqext<<" q_int_1: "<<qin1<<" +- "<<dqin1<<" q_int_2: "<<qin2<<" +- "<<dqin2<<" Test_eq1: "<<test1<<" Test_eq2: "<<test2<<endl;
+    if (params->adapt) {
+      if (test1) {
+	if (params->Twait > 1) params->Twait-=1;
+	params->Teq = 2*params->Twait;
+      } else if (!test2) {
+	eqmc = false;
+	params->Twait+=1;
+	params->Teq = 2*params->Twait;
+      }
     }
+    cout<<"End_sampling Teq: "<<params->Teq<<" Twait: "<<params->Twait<<" q_ext: "<<qext<<" +- "<<dqext<<" q_int_1: "<<qin1<<" +- "<<dqin1<<" q_int_2: "<<qin2<<" +- "<<dqin2<<" Test_eq1: "<<test1<<" Test_eq2: "<<test2<<endl;
     return eqmc;
   }
-
 
 
   /******************** METHODS FOR STATISTICS ***********************************************************/
@@ -598,7 +608,7 @@ class Model {
 	  n++;
 	  for(int j = i+1; j < L; j++) {
 	    for(int b = 0; b <q; b++) {
-	      double gradJ=sm[i*q+a][j*q+b] - sm_s[i*q+a][j*q+b] - params->regJ * ( (J[i*q +a][j*q + b] > 0)  - (J[i*q +a][j*q+b] < 0) );
+	      double gradJ=sm[i*q+a][j*q+b] - sm_s[i*q+a][j*q+b] - params->regJ1 * ( (J[i*q +a][j*q + b] > 0)  - (J[i*q +a][j*q+b] < 0) ) - params->regJ2 * J[i*q +a][j*q + b];
 	      double lrJ=params->lrateJ;
 	      if (params->learn_strat == 1) {
 		GJ[i*q+a][j*q+b]+=gradJ*gradJ;
@@ -632,7 +642,7 @@ class Model {
 	  modv+=Gh[i*q+a]*Gh[i*q+a];
 	  for(int j = i+1; j < L; j++) {
 	    for(int b = 0; b <q; b++) {
-	      double gradJ=sm[i*q+a][j*q+b] - sm_s[i*q+a][j*q+b];
+	      double gradJ=sm[i*q+a][j*q+b] - sm_s[i*q+a][j*q+b] - params->regJ1 * ( (J[i*q +a][j*q + b] > 0)  - (J[i*q +a][j*q+b] < 0) ) - params->regJ2 * J[i*q +a][j*q + b];
 	      J[i*q + a][j*q + b] += params->lrateJ * acc * decJ[i*q + a][j*q + b] * GJ[i*q + a][j*q + b];
 	      J[j*q + b][i*q + a] = J[i*q + a][j*q + b];
 	      GJ[i*q + a][j*q + b] += params->lrateJ * acc * decJ[i*q + a][j*q + b] * gradJ;
