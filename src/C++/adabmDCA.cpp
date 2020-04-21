@@ -50,14 +50,14 @@ int main(int argc, char ** argv) {
     fflush(stdout);
   }
   while(!conv) {
-    bool print_aux = false;
+    //bool print_aux = false;
     model.sample(data.msa);
     model.compute_errors(data.fm,data.sm,data.cov,errs);
     if(iter % params.nprint == 0) {
       fprintf(stdout, "it: %i el_time: %li N: %i Teq: %i Twait: %i merr_fm: %.1e merr_sm: %.1e averr_fm: %.1e averr_sm: %.1e cov_err: %.1e corr: %.2f sp: %.1e lrav: %.1e\n", iter, time(NULL)-in_time, params.Nmc_config * params.Nmc_starts, params.Teq, params.Twait, errs.merrh, errs.merrJ, errs.averrh, errs.averrJ, errs.errnorm, model.pearson(data.cov), model.model_sp, lrav);
       fflush(stdout);
     }
-    if(iter > 0 && (iter % params.nprintfile == 0 || print_aux)) {
+    if(iter > 0 && (iter % params.nprintfile == 0)) {
       params.construct_filenames(iter, conv, par, par_zsum, score, first, sec, third);
       print_frobenius_norms(model.h,model.J,model.L,model.q,score,par_zsum);
       model.print_model(par);
@@ -69,8 +69,16 @@ int main(int argc, char ** argv) {
     if(iter > 0 && params.compwise && (errs.errnorm<params.conv || iter % params.dec_steps == 0)) {
       fprintf(stdout,"Decimating..");
       int aux = ceil( model.n_links() / 100);
+      // First, print data
+      params.construct_filenames(iter, conv, par, par_zsum, score, first, sec, third);
+      print_frobenius_norms(model.h,model.J,model.L,model.q,score,par_zsum);
+      model.print_model(par);
+      if(data.tm.size()>0)
+	model.compute_third_order_correlations();
+      data.print_statistics(sec, first, third, model.fm_s, model.sm_s, model.tm_s);
+      //then, decimate
       model.decimate_compwise(aux,iter);
-      print_aux = true;
+      //print_aux = true;
     }
     if(errs.errnorm<params.conv && !params.compwise) {
       conv = true;
