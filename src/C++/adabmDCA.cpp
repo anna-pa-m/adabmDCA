@@ -21,7 +21,7 @@ using namespace std;
 int main(int argc, char ** argv) {
 
   /* START INITIALIZATION */
-  fprintf(stdout, "****** Boltzmann machine for DCA model ******\n");
+  cout << "****** Boltzmann machine for DCA model ******" << endl;
   Params params;
   params.read_params(argc,argv);
   srand(params.seed ? params.seed : time(NULL));
@@ -45,12 +45,11 @@ int main(int argc, char ** argv) {
   Errs errs;
   double lrav=params.lrateJ;
   if (!conv) {
-    fprintf(stdout, "****** Starting learning loop ******\n");
-    fprintf(stdout, "Printing output every %d iteration(s) - prameters every %d iterations\n", params.nprint, params.nprintfile);
+    cout << "****** Starting learning loop ******" << endl;
+    cout << "Printing output every " << params.nprint << " iterations - parameters every " << params.nprintfile << endl;
     fflush(stdout);
   }
-  while(!conv) {
-    //bool print_aux = false;
+  while(!conv) { 
     model.sample(data.msa);
     model.compute_errors(data.fm,data.sm,data.cov,errs);
     if(iter % params.nprint == 0) {
@@ -67,18 +66,17 @@ int main(int argc, char ** argv) {
     }
     lrav=model.update_parameters(data.fm,data.sm,iter);
     if(iter > 0 && params.compwise && (errs.errnorm<params.conv || iter % params.dec_steps == 0)) {
-      fprintf(stdout,"Decimating..");
-      int aux = ceil( model.n_links() / 100);
-      // First, print data
+      // Print converged parameters before decimation
       params.construct_filenames(iter, conv, par, par_zsum, score, first, sec, third);
       print_frobenius_norms(model.h,model.J,model.L,model.q,score,par_zsum);
       model.print_model(par);
       if(data.tm.size()>0)
 	model.compute_third_order_correlations();
       data.print_statistics(sec, first, third, model.fm_s, model.sm_s, model.tm_s);
-      //then, decimate
+      // Then decimate
+      fprintf(stdout,"Decimating..");
+      int aux = ceil( model.n_links() / 100);
       model.decimate_compwise(aux,iter);
-      //print_aux = true;
     }
     if(errs.errnorm<params.conv && !params.compwise) {
       conv = true;

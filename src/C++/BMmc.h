@@ -71,12 +71,12 @@ class Model {
 	curr_state.push_back(tmp);
       }
     } else {
-      if (msa.size() == 0) {
+      if (int(msa.size()) == 0) {
 	fprintf(stdout, "Empty MSA!\n");
 	exit(EXIT_FAILURE);
       } else {
 	for(int s = 0; s < params->Nmc_starts; s++) {
-	  int i = (int)rand() % msa.size();
+	  int i = (int)rand() % int(msa.size());
 	  curr_state.push_back(msa[i]);
 	}
       }
@@ -86,6 +86,8 @@ class Model {
   int remove_gauge_freedom(vector< vector<double> > & cov) {
     vector<double> sorted_matrix(q*q,0);
     vector<int> mapping(q*q);
+
+    double smalln = min(1e-30, params->pseudocount);
     int idx_aux[q*q][2];
     int neff = 0;
     for(int i = 0; i < L; i++) {
@@ -96,7 +98,7 @@ class Model {
 	    mapping[k] = k;
 	    idx_aux[k][0] = a;
 	    idx_aux[k][1] = b;
-	    sorted_matrix[k] = fabs(cov[i*q+a][j*q+b]) + 1e-8 * rand01();
+	    sorted_matrix[k] = fabs(cov[i*q+a][j*q+b]) + smalln * rand01();
 	    k += 1;
 	  }
 	}
@@ -364,7 +366,7 @@ class Model {
     vector<int> old_state1, old_state2, oldold_state1, oldold_state2;
     update_statistics(x1,fp,fe);        
     update_statistics(x2,fp,fe);
-    if(tm_s.size()>0) {
+    if(int(tm_s.size())>0) {
       update_tm_statistics(x1);
       update_tm_statistics(x2);
     }
@@ -384,7 +386,7 @@ class Model {
       }
       update_statistics(x1,fp,fe);
       update_statistics(x2,fp,fe);
-      if(tm_s.size()>0) {
+      if(int(tm_s.size())>0) {
 	update_tm_statistics(x1);
 	update_tm_statistics(x2);
       }
@@ -422,7 +424,7 @@ class Model {
     char filename_aux[1000];
     sprintf(filename_aux, "corr_%s.dat", params->label);
     FILE *fileout = fopen(filename_aux,"w");
-    for (int i=0;i<corr.size();i++) {
+    for (int i=0;i<int(corr.size());i++) {
       fprintf(fileout, "%i %f\n", i, corr[i]);
     }
     fclose(fileout);
@@ -461,7 +463,7 @@ class Model {
 	sm_s[i][j] = 0;
       }
     }
-    for(int ind = 0; ind < tm_s.size(); ind++) 
+    for(int ind = 0; ind < int(tm_s.size()); ind++) 
       tm_s[ind] = 0;  
     FILE * fp;
     if(params->file_samples) {
@@ -497,7 +499,7 @@ class Model {
   void update_tm_statistics(vector<int> & x) {
     int i, j, k, a, b, c;
     int Ns = params->Nmc_starts * params->Nmc_config;
-    for(int ind = 0; ind < (*tm_index).size(); ind ++) {
+    for(int ind = 0; ind < int((*tm_index).size()); ind ++) {
       i = (*tm_index)[ind][0];
       j = (*tm_index)[ind][1];
       k = (*tm_index)[ind][2];
@@ -511,7 +513,7 @@ class Model {
 
   void compute_third_order_correlations() {
     int ind, i, j, k, a, b, c;
-    for(ind = 0; ind < (*tm_index).size(); ind++) {
+    for(ind = 0; ind < int((*tm_index).size()); ind++) {
       i = (*tm_index)[ind][0];
       j = (*tm_index)[ind][1];
       k = (*tm_index)[ind][2];
@@ -719,14 +721,15 @@ class Model {
   }
   
   int decimate_compwise(int c, int iter) {
-    int i, j, a, b, index, m;
+    int i, j, a, b, index, m = 0;
     FILE *fileout;
     char filename_aux[1000];
+    double smalln = min(1e-30, params->pseudocount * 0.03);
     sprintf(filename_aux, "sDKL_couplings_%s_iter_%i.dat", params->label, iter);
     fileout = fopen(filename_aux, "w");
     double maxsdkl = -1e50;
     printf("Decimating %d couplings\n",c);
-    for(int k = 0; k < tmp_idx.size(); k++) {
+    for(int k = 0; k < int(tmp_idx.size()); k++) {
       tmp_idx[k] = k;
       i = idx[k][0];
       j = idx[k][1];
@@ -734,17 +737,19 @@ class Model {
       b = idx[k][3];
       if(decJ[i*q + a][j*q + b] > 0) {
 	m += 1;
-	double auxsm = sm_s[i*q+a][j*q+b] == 0 ? 1e-8 : sm_s[i*q+a][j*q+b];
+	double auxsm = smalln * rand01() + sm_s[i*q+a][j*q+b];
 	sorted_struct[k] = J[i*q+a][j*q+b]*auxsm - (J[i*q+a][j*q+b]*exp(-J[i*q+a][j*q+b])*auxsm)/(exp(-J[i*q+a][j*q+b])*auxsm+1-auxsm);
+	sorted_struct[k] += rand01() * smalln;
 	maxsdkl = max(maxsdkl, sorted_struct[k]);
+
 	fprintf(fileout, "J %i %i %i %i %.2e %f %f\n", i, j, a, b, sorted_struct[k], J[i*q+a][j*q+b], sm_s[i*q+a][j*q+b]);
       } else {
 	double f = rand01();
-	sorted_struct[k] =  tmp_idx.size() + f; // to be optimized: elements should be removed instead of putting large numbers
+	sorted_struct[k] =  int(tmp_idx.size()) + f; // to be optimized: elements should be removed instead of putting large numbers
       }
     }
     fprintf(stdout, "Non-zeros parameters %d \n",m);
-    quicksort(sorted_struct, tmp_idx, 0, tmp_idx.size()-1);
+    quicksort(sorted_struct, tmp_idx, 0, int(tmp_idx.size())-1);
     for(int k = 0; k < c; k++) {
       index = tmp_idx[k];
       i = idx[index][0];

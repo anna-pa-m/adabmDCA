@@ -78,7 +78,7 @@ void permute(int * vector, int s) {
 
 int overlap(vector<int> & x1, vector<int> & x2) {
   int q=0;
-  for (int i=0; i<x1.size(); i++) {
+  for (int i=0; i<int(x1.size()); i++) {
     if (x1[i]==x2[i]) q++;
   }
   return q;

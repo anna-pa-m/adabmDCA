@@ -268,9 +268,9 @@ class Params {
       fprintf(stdout, "Performing Gibbs sampling\n");
     }
     if (adapt) {
-      fprintf(stdout, "Adaptative sampling time. Initial values: %d\nInitial equilibration time: %d\n", Twait, Teq);
+      fprintf(stdout, "Adaptive sampling time. Initial sampling time: %d, initial equilibration time: %d\n", Twait, Teq);
     } else {
-      fprintf(stdout, "Fixed sampling time: %d\nInitial equilibration time: %d\n", Twait, Teq);
+      fprintf(stdout, "Fixed sampling time: %d, fixed equilibration time: %d\n", Twait, Teq);
     }
     fprintf(stdout, "Using %d seeds and tot. number of points %d\n", Nmc_starts, Nmc_starts * Nmc_config);
     if (initdata) {
@@ -432,8 +432,8 @@ class Data {
 	  auxseq.push_back(convert_char_epi(ch));
       } else if (ch == '\n' && newseq == 0 && readseq == 1) {
 	if (L == 0) {
-	  L = auxseq.size();
-	} else if (L!=auxseq.size()) {
+	  L = int(auxseq.size());
+	} else if (L!=int(auxseq.size())) {
 	  cout<<"MSA reading error!"<<endl;
 	  exit(1);
 	}
@@ -441,7 +441,7 @@ class Data {
 	msa.push_back(auxseq);
       }
     }
-    M = msa.size();
+    M = int(msa.size());
     fprintf(stdout, "Reading alignment completed.\nM = %i L = %i q = %i \n", M, L, q);
     fclose(filemsa);
   }
@@ -550,7 +550,9 @@ class Data {
   
   void read_freq() {    
     FILE * filefreq;
-    int i, j, a, b;
+    int i, j;
+    int a = -1;
+    int b = -1;
     char ch, cha,chb, t;
     char tmp[1024];
     double aux;
@@ -645,7 +647,7 @@ class Data {
 	}
 	fprintf(stdout, "Number of indices %d\n", (int)tm_index.size());
 	// compute 3rd order moments of msa, slow!
-	for(int ind =0; ind < tm_index.size(); ind++) {
+	for(int ind =0; ind < int(tm_index.size()); ind++) {
 	  i = tm_index[ind][0];
 	  j = tm_index[ind][1];
 	  k = tm_index[ind][2];
@@ -692,11 +694,11 @@ class Data {
       for(int a = 0; a < q; a++)
 	fprintf(ff, "%i %i %.5f %.5f\n", i, a, fm[i*q+a], fm_s[i*q+a]);
     }
-    if(tm_index.size()>0) {
+    if(int(tm_index.size())>0) {
       ft = fopen(file_tm, "w");
       int i, j, k, a, b, c;
       double aux;
-      for(int ind = 0; ind < tm_index.size(); ind++) {
+      for(int ind = 0; ind < int(tm_index.size()); ind++) {
 	i = tm_index[ind][0];
 	j = tm_index[ind][1];
 	k = tm_index[ind][2];
