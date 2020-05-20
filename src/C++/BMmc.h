@@ -86,7 +86,6 @@ class Model {
   int remove_gauge_freedom(vector< vector<double> > & cov) {
     vector<double> sorted_matrix(q*q,0);
     vector<int> mapping(q*q);
-
     double smalln = min(1e-30, params->pseudocount);
     int idx_aux[q*q][2];
     int neff = 0;
@@ -104,14 +103,14 @@ class Model {
 	}
 	quicksort(sorted_matrix, mapping, 0, q*q - 1);
 	for(k = 0; k < 2*q-1; k++) {
-	  static int a = idx_aux[mapping[k]][0];
-	  static int b = idx_aux[mapping[k]][1];
+	  int a = idx_aux[mapping[k]][0];
+	  int b = idx_aux[mapping[k]][1];
+	  if (decJ[i*q+a][j*q+b] > 0) neff++;
 	  J[i*q+a][j*q+b] = 0.0;
 	  decJ[i*q+a][j*q+b] = 0.0;
 	  J[j*q+b][i*q+a] = 0.0;
 	  decJ[j*q+b][i*q+a] = 0.0;
 	}
-	neff += 2*q -1;
       }
     }
     fprintf(stdout, "%d couplings have been removed\n", neff);
@@ -722,11 +721,11 @@ class Model {
   
   int decimate_compwise(int c, int iter) {
     int i, j, a, b, index, m = 0;
-    FILE *fileout;
-    char filename_aux[1000];
+    //    FILE *fileout;
+    // char filename_aux[1000];
     double smalln = min(1e-30, params->pseudocount * 0.03);
-    sprintf(filename_aux, "sDKL_couplings_%s_iter_%i.dat", params->label, iter);
-    fileout = fopen(filename_aux, "w");
+    // sprintf(filename_aux, "sDKL_couplings_%s_iter_%i.dat", params->label, iter);
+    // fileout = fopen(filename_aux, "w");
     double maxsdkl = -1e50;
     printf("Decimating %d couplings\n",c);
     for(int k = 0; k < int(tmp_idx.size()); k++) {
@@ -741,14 +740,13 @@ class Model {
 	sorted_struct[k] = J[i*q+a][j*q+b]*auxsm - (J[i*q+a][j*q+b]*exp(-J[i*q+a][j*q+b])*auxsm)/(exp(-J[i*q+a][j*q+b])*auxsm+1-auxsm);
 	sorted_struct[k] += rand01() * smalln;
 	maxsdkl = max(maxsdkl, sorted_struct[k]);
-
-	fprintf(fileout, "J %i %i %i %i %.2e %f %f\n", i, j, a, b, sorted_struct[k], J[i*q+a][j*q+b], sm_s[i*q+a][j*q+b]);
+	// fprintf(fileout, "J %i %i %i %i %.2e %f %f\n", i, j, a, b, sorted_struct[k], J[i*q+a][j*q+b], sm_s[i*q+a][j*q+b]);
       } else {
 	double f = rand01();
 	sorted_struct[k] =  int(tmp_idx.size()) + f; // to be optimized: elements should be removed instead of putting large numbers
       }
     }
-    fprintf(stdout, "Non-zeros parameters %d \n",m);
+    fprintf(stdout, "Non-zeros parameters before decimation %d \n",m);
     quicksort(sorted_struct, tmp_idx, 0, int(tmp_idx.size())-1);
     for(int k = 0; k < c; k++) {
       index = tmp_idx[k];
@@ -757,15 +755,15 @@ class Model {
       a = idx[index][2];
       b = idx[index][3];
       if(decJ[i*q+a][j*q+b] == 0) {printf("Error: coupling %d %d %d %d was already decimated\n",i,j,a,b);}
-      fprintf(fileout, "D %i %i %i %i %.2e %f %f\n", i, j, a, b, sorted_struct[k], J[i*q+a][j*q+b], sm_s[i*q+a][j*q+b]);
+      // fprintf(fileout, "D %i %i %i %i %.2e %f %f\n", i, j, a, b, sorted_struct[k], J[i*q+a][j*q+b], sm_s[i*q+a][j*q+b]);
       J[i*q+a][j*q+b] = 0.0;
       J[j*q+b][i*q+a] = 0.0;
       decJ[i*q+a][j*q+b] = 0.0;
       decJ[j*q+b][i*q+a] = 0.0;
     }
     index = tmp_idx[c];
-    fflush(fileout);
-    fclose(fileout);
+    //    fflush(fileout);
+    //    fclose(fileout);
     fprintf(stdout, "Smallest sDKL associated with the first kept coupling is %.2e (i: %i j: %i a: %i b: %i)\n", sorted_struct[c], idx[index][0], idx[index][1], idx[index][2], idx[index][3]);
     double nref=(L*(L-1)*q*q)/2;
     model_sp+=c/nref;

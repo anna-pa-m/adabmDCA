@@ -74,7 +74,6 @@ int main(int argc, char ** argv) {
 	model.compute_third_order_correlations();
       data.print_statistics(sec, first, third, model.fm_s, model.sm_s, model.tm_s);
       // Then decimate
-      fprintf(stdout,"Decimating..");
       int aux = ceil( model.n_links() / 100);
       model.decimate_compwise(aux,iter);
     }

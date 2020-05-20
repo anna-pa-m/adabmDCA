@@ -339,30 +339,29 @@ class Params {
   }
 
   void construct_filenames(int iter, bool conv, char * par, char * par_zsum, char * score, char * first, char * sec, char * third) {
-      char sc = (Gibbs == 0) ? 'M' : 'G';
       if (!conv) {
 	if (overwrite) {
-	  sprintf(par, "Parameters_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
-	  sprintf(par_zsum, "Parameters_tmp_zerosum_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
-	  sprintf(score, "Score_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
-	  sprintf(first, "First_mom_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
-	  sprintf(sec, "Sec_mom_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
-	  sprintf(third, "Third_mom_tmp_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
+	  sprintf(par, "Parameters_tmp_%s.dat", label);
+	  sprintf(par_zsum, "Parameters_tmp_zerosum_%s.dat", label);
+	  sprintf(score, "Score_tmp_%s.dat", label);
+	  sprintf(first, "First_mom_tmp_%s.dat", label);
+	  sprintf(sec, "Sec_mom_tmp_%s.dat", label);
+	  sprintf(third, "Third_mom_tmp_%s.dat", label);
 	} else {
-	  sprintf(par, "Parameters_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, label, sc, init, lrateJ, lrateh, learn_strat);
-	  sprintf(par_zsum, "Parameters_tmp_%d_zerosum_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, label, sc, init, lrateJ, lrateh, learn_strat);
-	  sprintf(score, "Score_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, label, sc, init, lrateJ, lrateh, learn_strat);
-	  sprintf(first, "First_mom_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, label, sc, init, lrateJ, lrateh, learn_strat);
-	  sprintf(sec, "Sec_mom_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, label, sc, init, lrateJ, lrateh, learn_strat);
-	  sprintf(third, "Third_mom_tmp_%d_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", iter, label, sc, init, lrateJ, lrateh, learn_strat);
+	  sprintf(par, "Parameters_tmp_%d_%s.dat", iter, label);
+	  sprintf(par_zsum, "Parameters_tmp_%d_zerosum_%s.dat", iter, label);
+	  sprintf(score, "Score_tmp_%d_%s.dat", iter, label);
+	  sprintf(first, "First_mom_tmp_%d_%s.dat", iter, label);
+	  sprintf(sec, "Sec_mom_tmp_%d_%s.dat", iter, label);
+	  sprintf(third, "Third_mom_tmp_%d_%s.dat", iter, label);
 	}
       } else {
-	sprintf(par, "Parameters_conv_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
-	sprintf(par_zsum, "Parameters_conv_zerosum_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
-	sprintf(score, "Score_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat",label, sc, init, lrateJ, lrateh, learn_strat);
-	sprintf(first, "First_mom_conv_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
-	sprintf(sec, "Sec_mom_conv_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
-	sprintf(third, "Third_order_connected_corr_%s_%c_%c_lJ%.1e_lh%.1e_a%i.dat", label, sc, init, lrateJ, lrateh, learn_strat);
+	sprintf(par, "Parameters_conv_%s.dat", label);
+	sprintf(par_zsum, "Parameters_conv_zerosum_%s.dat", label);
+	sprintf(score, "Score_%s.dat",label);
+	sprintf(first, "First_mom_conv_%s.dat", label);
+	sprintf(sec, "Sec_mom_conv_%s.dat", label);
+	sprintf(third, "Third_order_connected_corr_%s.dat", label);
       }
   }
   
@@ -550,9 +549,7 @@ class Data {
   
   void read_freq() {    
     FILE * filefreq;
-    int i, j;
-    int a = -1;
-    int b = -1;
+    int i, j, a = -1, b = -1;
     char ch, cha,chb, t;
     char tmp[1024];
     double aux;
