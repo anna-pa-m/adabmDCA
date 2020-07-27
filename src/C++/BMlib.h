@@ -21,7 +21,7 @@ using namespace std;
 class Params {
  public:
   char * file_msa, * file_freq, * file_w , * file_params, init, * label, * ctype, * file_3points, *file_cc, *file_samples, *file_en;
-  bool Metropolis, Gibbs, rmgauge, dgap, gapnn, phmm, blockwise, compwise, persistent, initdata, overwrite, adapt;
+  bool Metropolis, Gibbs, rmgauge, dgap, gapnn, phmm, blockwise, compwise, persistent, initdata, overwrite, adapt, dec_sdkl, dec_f, dec_J;
   double sparsity, rho, w_th,  regJ1, regJ2, lrateJ, lrateh, conv, pseudocount;
   int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, Nmc_config, Twait, maxiter, dec_steps;
   Params() {
@@ -68,11 +68,14 @@ class Params {
     Twait = 10;
     maxiter = 2000;
     dec_steps = INT_MAX;
+    dec_sdkl = true;
+    dec_f = false;
+    dec_J =false;
   }
 
   int read_params (int & argc, char ** argv) {
     int c;
-    while ((c = getopt(argc, argv, "a:b:c:d:e:f:g:hi:j:k:l:m:n:o:p:q:r:s:t:u:v:w:x:y:z:ABC:DE:FGHILMNPQRS:T:WX:")) != -1) {
+    while ((c = getopt(argc, argv, "a:b:c:d:e:f:g:hi:j:k:l:m:n:o:p:q:r:s:t:u:v:w:x:y:z:ABC:DE:FGHILMNPQRS:T:UVWX:")) != -1) {
 		switch (c) {
 			case 'b':
 				ctype = optarg;
@@ -91,6 +94,19 @@ class Params {
 				break;
 			case 'W':
 				compwise = true;
+				dec_f = false;
+				dec_J = false;
+				dec_sdkl = true;
+				break;
+			case 'U':
+				dec_sdkl = false;
+				dec_f = true;
+				dec_J = false;
+				break;
+			case 'V':
+				dec_sdkl = false;
+				dec_J = true;
+				dec_f = false;
 				break;
 			case 'S':
 				file_samples = optarg;
@@ -220,7 +236,7 @@ class Params {
 				fprintf(stdout, "-x : Required sparsity. Add -B for block-wise decimation or -W for component-wise decimation\n");
 				fprintf(stdout, "-X : Decimate every x steps even if not converged (default: infinite)\n");
 				fprintf(stdout, "-B : (flag) A block-wise decimation is applied to the couplings using sDKL as a criterion. Default: false\n");
-				fprintf(stdout, "-W : (flag) A component-wise decimation is applied to the couplings using sDKL as a criterion. Default: false\n");
+				fprintf(stdout, "-W : (flag) A component-wise decimation is applied to the couplings using sDKL as a criterion. Default: false\n\t use -U (flag) to use frequencies\n\t use -V (flag) to use couplings\n");
 				fprintf(stdout, "-R : (flag) Zero J,H initialization\n");
 				fprintf(stdout, "-I : (flag) Indipendent model initialization\n");
 				fprintf(stdout, "-A : (flag) Remove gauge invariance\n");
@@ -316,7 +332,13 @@ class Params {
 	fprintf(stdout, "\n Please use either -W or -B flags to specify decimation type! EXIT\n");
 	exit(EXIT_FAILURE);
       } else if(compwise && !blockwise) {
-	fprintf(stdout, " using (component-wise) Kullback-Leibler based decimation");
+	fprintf(stdout, " using (component-wise) ");
+	if(dec_sdkl)
+		fprintf(stdout, "Kullback-Leibler based decimation");
+	if(dec_f)
+		fprintf(stdout, "second moments based decimation");
+	if(dec_J)
+		fprintf(stdout, "couplings based decimation");
       } else if (!compwise && blockwise) {
 	fprintf(stdout, " using (block-wise) Kullback-Leibler based decimation -- NOT YET IMPLEMENTED!\n");
 	exit(EXIT_FAILURE);

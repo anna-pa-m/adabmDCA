@@ -736,9 +736,15 @@ class Model {
       b = idx[k][3];
       if(decJ[i*q + a][j*q + b] > 0) {
 	m += 1;
-	double auxsm = smalln * rand01() + sm_s[i*q+a][j*q+b];
-	sorted_struct[k] = J[i*q+a][j*q+b]*auxsm - (J[i*q+a][j*q+b]*exp(-J[i*q+a][j*q+b])*auxsm)/(exp(-J[i*q+a][j*q+b])*auxsm+1-auxsm);
-	sorted_struct[k] += rand01() * smalln;
+	if(params->dec_sdkl) {
+		double auxsm = smalln * rand01() + sm_s[i*q+a][j*q+b];
+		sorted_struct[k] = J[i*q+a][j*q+b]*auxsm - (J[i*q+a][j*q+b]*exp(-J[i*q+a][j*q+b])*auxsm)/(exp(-J[i*q+a][j*q+b])*auxsm+1-auxsm);
+		sorted_struct[k] += rand01() * smalln;
+	} else if(params->dec_f) {
+		sorted_struct[k] = smalln * rand01() + fabs(sm_s[i*q+a][j*q+b]);
+	} else if(params->dec_J) {
+		sorted_struct[k] = smalln * rand01() + fabs(J[i*q+a][j*q+b]);
+	}
 	maxsdkl = max(maxsdkl, sorted_struct[k]);
 	// fprintf(fileout, "J %i %i %i %i %.2e %f %f\n", i, j, a, b, sorted_struct[k], J[i*q+a][j*q+b], sm_s[i*q+a][j*q+b]);
       } else {
