@@ -6,7 +6,7 @@ This code in written in C++ language. To properly install ```adabmDCA```, run
 ```
 make
 ```
-on adabmDCA/src folder. It suffices a gcc compiler.
+on adabmDCA/src folder. It suffices a ```gcc``` compiler.
 
 ## Usage
 This algorithm is able to infer several Max-Ent statistical models of Potts variables given a set of sequences. More precisly, it is able to learn the couplings and the fields parameters of a set of Direct Coupling Analysis (DCA) models given a Multiple Sequence Alignment (MSA) of protein, RNA, binary sequences (for Ising variables) in FASTA format. The learning is performed via a gradient ascent of the likelihood of the data, computed via a Monte Carlo sampling, either using Metropolis or Gibbs steps.
@@ -14,10 +14,10 @@ All the possible features (model choices, input and output files) implemented in
 ```
 ./adabmDCA -h
 ```
-## Basic input/output files
+## Basic run
 Suppose we would like to learn a DCA model associated with a given MSA, i.e. in ```test/PF00018.fasta```. The command
 ```
-./adabmDCA -f MSA.fasta -z 1 -m 500 -c 1e-2 
+./adabmDCA -f ../test/PF00018.fasta -z 1 -m 500 -c 1e-2 
 ```
 will run a Boltzmann learning, using the default MCMC, printing to files every 500 iterations the parameters and the statistics of MSA against thoses of the model. The run will stop when either we reach the maximum number of iterations (default: 2000) or we reach convergence, i.e. the maximum fitting error among all the connected covariances is 1e-2 (tunable using the flag ```-c```).
 The output will produce a list of information concerning the adopted learning strategy
@@ -48,13 +48,50 @@ it: 0 el_time: 7 N: 50000 Teq: 18 Twait: 9 merr_fm: 9.2e-01 merr_sm: 8.6e-01 ave
 ```
 where:
 
-  - ```it:``` gives the present iteration
+  - ```it:``` gives the current iteration
   - ```el_time:``` is the running time (in seconds)
   - ```N:``` is the number of samples used for computing the model averages
   - ```Teq:``` is the equilibration time (in sweep) of each MC chain
-  - ```Twait:``` is the de-correlation time (in sweep) between two sapled configurations within each chain
-  - ```merr_fm:```
+  - ```Twait:``` is the de-correlation time (in sweep) between two sampled configurations within each chain
+  - ```merr_fm:``` maximum value for the fitting error for the first moments
+  - ```merr_sm:``` maximum value for the fitting error for the second moments
+  - ```averr_fm:``` mean value for the fitting error for the first moments
+  - ```averr_sm:``` mean value for the fitting error for the second moments
+  - ```cov_err:``` maximum value for the fitting error for the connected covariances
+  - ```corr:``` Pearson correlation coefficients between the model and MSA connected covariances
+  - ```sp:``` sparsity of the couplings parameters, i.e. the number of couplings fixed to zero divided by q<sup>2</sup>L(L-1)/2
+  - ```lrav:``` average learning rate
+  
+## Input/Output files
 
+## License
+Apache?
+
+## Citations
+The performances of the adaptive Boltzmann Machine are shown in MISSING LINK. Please cite this article if you use this software or any part of it.
+
+```adabmDCA``` has been used in:
+ - https://arxiv.org/abs/2005.08500 for learning the Potts model and pseudo Hidden Markov model (see option ```-H``` in Advanded options/Available maximum entropy models) of the studied proteins and RNA sequences;
+ - MISSING LINK for the learning of the dense model and the decimation procedure (see Advanced options/Pruning the coupling)
+
+## Advanced options
+
+### Tuning the Monte Carlo Markov Chain
+
+### Compute non-fitted third order statistics
+
+### Available maximum entropy models
+
+### Pruning the couplings
+
+### Learning strategies
+
+## To do list
+
+Several things:
+
+  - implement ```adam``` learning strategy
+  - parallelization of the MCMC
 
 
 
