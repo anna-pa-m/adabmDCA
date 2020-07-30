@@ -1,20 +1,61 @@
-# adabmDCA 
-This is an (adaptive) Boltzmann machine for Direct Coupling Analysis model. It is written in C language.
+# Adaptive Boltzmann machine learning for Direct Coupling Analysis model
 
-# Installation
+## Installation
 
-To properly install adabmDCA, run
+This code in written in C++ language. To properly install ```adabmDCA```, run
 ```
 make
 ```
 on adabmDCA/src folder. It suffices a gcc compiler.
 
-# Usage
-This algorithm is able to infer several Max-Ent statistical models of Potts variables given a set of observations. More precisly, it is able to learn the couplings and the fields parameters of a set of Direct Coupling Analysis (DCA) models given a Multiple Sequence Alignment (MSA) of protein, RNA, binary sequences. The learning is performed via a gradient ascent of the likelihood of the data, computed via a Monte Carlo sampling, either using Metropolis or Gibbs sampling.
-All the possible features (model choices, input and output files) implemented in adabmDCA can be shown typing
+## Usage
+This algorithm is able to infer several Max-Ent statistical models of Potts variables given a set of sequences. More precisly, it is able to learn the couplings and the fields parameters of a set of Direct Coupling Analysis (DCA) models given a Multiple Sequence Alignment (MSA) of protein, RNA, binary sequences (for Ising variables) in FASTA format. The learning is performed via a gradient ascent of the likelihood of the data, computed via a Monte Carlo sampling, either using Metropolis or Gibbs steps.
+All the possible features (model choices, input and output files) implemented in ```adabmDCA``` can be shown typing
 ```
 ./adabmDCA -h
 ```
 ## Basic input/output files
+Suppose we would like to learn a DCA model associated with a given MSA, i.e. in ```test/PF00018.fasta```. The command
+```
+./adabmDCA -f MSA.fasta -z 1 -m 500 -c 1e-2 
+```
+will run a Boltzmann learning, using the default MCMC, printing to files every 500 iterations the parameters and the statistics of MSA against thoses of the model. The run will stop when either we reach the maximum number of iterations (default: 2000) or we reach convergence, i.e. the maximum fitting error among all the connected covariances is 1e-2 (tunable using the flag ```-c```).
+The output will produce a list of information concerning the adopted learning strategy
+```
+****** Boltzmann machine for DCA model ******
+****** Initializing data structures ******
+Using alphabet: -ACDEFGHIKLMNPQRSTVWY
+Reading MSA from ../test/PF00018.fasta
+Reading alignment completed.
+M = 17370 L = 48 q = 21 
+Computing weights...done
+Computing empirical statistics...Meff: 3742.451636
+No three-points correlations indices specified
+****** Initializing model ******
+Performing Metropolis-Hastings MC
+Adaptive sampling time. Initial sampling time: 10, initial equilibration time: 20
+Using 1000 seeds and tot. number of points 50000
+MC chains are randomly initialized at the beginning of each iteration
+Learning strategy: Using standard gradient descent with constant learning rate (for J 5.000e-02, for h 5.000e-02)
+Using pseudo-count: 3e-04
+Zero-parameters initialization...done
+Using full Potts model
+Sparsity after initialization: 0.000000
+```
+At every step (the frequency can be specified by the ```-z``` flag)  it writes to ```stdout``` an update of the learning
+```
+it: 0 el_time: 7 N: 50000 Teq: 18 Twait: 9 merr_fm: 9.2e-01 merr_sm: 8.6e-01 averr_fm: 5.7e-02 averr_sm: 3.5e-03 cov_err: 2.0e-01 corr: -0.00 sp: 0.0e+00 lrav: 5.0e-02
+```
+where:
+
+  - ```it:``` gives the present iteration
+  - ```el_time:``` is the running time (in seconds)
+  - ```N:``` is the number of samples used for computing the model averages
+  - ```Teq:``` is the equilibration time (in sweep) of each MC chain
+  - ```Twait:``` is the de-correlation time (in sweep) between two sapled configurations within each chain
+  - ```merr_fm:```
+
+
+
 
 
