@@ -22,7 +22,7 @@ class Params {
  public:
   char * file_msa, * file_freq, * file_w , * file_params, init, * label, * ctype, * file_3points, *file_cc, *file_samples, *file_en;
   bool Metropolis, Gibbs, rmgauge, dgap, gapnn, phmm, blockwise, compwise, persistent, initdata, overwrite, adapt, dec_sdkl, dec_f, dec_J;
-  double sparsity, rho, w_th,  regJ1, regJ2, lrateJ, lrateh, conv, pseudocount;
+  double sparsity, rho, w_th,  regJ1, regJ2, lrateJ, lrateh, conv, pseudocount, beta;
   int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, Nmc_config, Twait, maxiter, dec_steps;
   Params() {
     file_msa = 0;
@@ -48,6 +48,9 @@ class Params {
     initdata = false;
     overwrite = true;
     adapt = true;
+    dec_sdkl = true;
+    dec_f = false;
+    dec_J = false;
     sparsity = 0;
     rho = 0.9; // RMSprop reinforcement (learn_strat = 2)
     w_th = 0.2;
@@ -57,6 +60,7 @@ class Params {
     lrateh = 5e-2;
     conv = 8e-3;
     pseudocount = 0;
+    beta = 1;
     tau = 1000; // tau parameter for search and converge (learn_strat = 3)
     seed = 0;
     learn_strat = 0;
@@ -68,14 +72,11 @@ class Params {
     Twait = 10;
     maxiter = 2000;
     dec_steps = INT_MAX;
-    dec_sdkl = true;
-    dec_f = false;
-    dec_J =false;
   }
 
   int read_params (int & argc, char ** argv) {
     int c;
-    while ((c = getopt(argc, argv, "a:b:c:d:e:f:g:hi:j:k:l:m:n:o:p:q:r:s:t:u:v:w:x:y:z:ABC:DE:FGHILMNPQRS:T:UVWX:")) != -1) {
+    while ((c = getopt(argc, argv, "a:b:c:d:e:f:g:hi:j:k:l:m:n:o:p:q:r:s:t:u:v:w:x:y:z:ABC:DE:FGHIJ:LMNPQRS:T:UVWX:")) != -1) {
 		switch (c) {
 			case 'b':
 				ctype = optarg;
@@ -152,6 +153,9 @@ class Params {
 				break;
 			case 'p':
 				file_params = optarg;
+				break;
+    		        case 'J':
+		                beta = atof(optarg);
 				break;
 			case 'e':
 				Teq = atoi(optarg);
@@ -251,6 +255,7 @@ class Params {
 				fprintf(stdout, "-s : Metropolis chains, default: %d\n", Nmc_starts);
 				fprintf(stdout, "-n : Number of MC configurations per chain, default: %d\n", Nmc_config);
 				fprintf(stdout, "-p : (optional file) Initial parameters J, h\n");
+				fprintf(stdout, "-J : Rescale initial parameters J (not h) by argument, default: %.1f\n",beta);
 				fprintf(stdout, "-c : Convergence tolerance, default: %.3e\n", conv);
 				fprintf(stdout, "-e : Initial MC equilibration time (in MCsweeps), default: 20 \n");
 				fprintf(stdout, "-t : Initial sampling time of MC algorithm (in MCsweeps), default: 10 \n");

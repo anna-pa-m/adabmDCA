@@ -128,7 +128,7 @@ class Model {
 	exit(EXIT_FAILURE);
     }
     if(params->file_params) {
-      fprintf(stdout, "Reading input parameters from %s ...", params->file_params);
+      fprintf(stdout, "Reading input parameters from %s with beta=%lf ...(couplings only)", params->file_params, params->beta);
       FILE *filep;
       if(!(filep = fopen(params->file_params, "r"))) {
 	fprintf(stderr, "File %s not found\n", params->file_params);
@@ -142,13 +142,13 @@ class Model {
 	  switch (c) {
 	  case 'J':
 	    sscanf(buffer, "J %d %d %d %d %lf \n", &i, &j, &a, &b, &tmp);
-	    J[i*q + a][j*q + b] = tmp;
-	    J[j*q + b][i*q + a] = tmp;
+	    J[i*q + a][j*q + b] = params->beta * tmp;
+	    J[j*q + b][i*q + a] = params->beta * tmp;
 	    break;
 	  case 'j':
 	    sscanf(buffer, "j %d %d %d %d %lf \n", &i, &j, &a, &b, &tmp);
-	    J[i*q + a][j*q + b] = tmp;
-	    J[j*q + b][i*q + a] = tmp;
+	    J[i*q + a][j*q + b] = params->beta * tmp;
+	    J[j*q + b][i*q + a] = params->beta * tmp;
 	    break;
 	  case 'H':
 	    sscanf(buffer, "H %d %d %lf \n", &i, &a, &tmp);
@@ -243,10 +243,11 @@ class Model {
       }
       if(params->rmgauge) remove_gauge_freedom(cov);
     } else {
-      fprintf(stdout, "Reading interaction graph from input file...");
+      fprintf(stdout, "Reading interaction graph from %s...",params->file_cc);
+      fflush(stdout);
       FILE *filep;
       if(!(filep = fopen(params->file_cc, "r"))) {
-	fprintf(stderr, "File %s not found\n", params->file_params);
+	fprintf(stderr, "File %s not found\n", params->file_cc);
 	exit(EXIT_FAILURE);
       } else {
 	int  i,j, a, b;
@@ -300,6 +301,23 @@ class Model {
 
 
   /******************** METHODS FOR MONTE CARLO ***********************************************************/
+
+  double prof_energy(vector<int> & seq) {
+    double en = 0;  
+    for(int i = 0; i < L; i++) {
+      en += -h[i*q + seq[i]];
+    }
+    return en;
+  }
+
+  double DCA_energy(vector<int> & seq) {
+    double en = 0;  
+    for(int i = 0; i < L; i++) {
+      for(int j = i+1; j < L; j++) 
+	en += -J[i*q + seq[i]][j*q +seq[j]];
+    }
+    return en;
+  }
 
   double energy(vector<int> & seq) {
     double en = 0;  
@@ -491,7 +509,7 @@ class Model {
       fprintf(fp, "\n");
     }
     if(params->file_en) {
-      fprintf(fe, "%lf\n", energy(x));
+      fprintf(fe, "%lf %lf\n", prof_energy(x), DCA_energy(x));
     }
   }
 
@@ -737,13 +755,13 @@ class Model {
       if(decJ[i*q + a][j*q + b] > 0) {
 	m += 1;
 	if(params->dec_sdkl) {
-		double auxsm = smalln * rand01() + sm_s[i*q+a][j*q+b];
-		sorted_struct[k] = J[i*q+a][j*q+b]*auxsm - (J[i*q+a][j*q+b]*exp(-J[i*q+a][j*q+b])*auxsm)/(exp(-J[i*q+a][j*q+b])*auxsm+1-auxsm);
-		sorted_struct[k] += rand01() * smalln;
+	  double auxsm = smalln * rand01() + sm_s[i*q+a][j*q+b];
+	  sorted_struct[k] = J[i*q+a][j*q+b]*auxsm - (J[i*q+a][j*q+b]*exp(-J[i*q+a][j*q+b])*auxsm)/(exp(-J[i*q+a][j*q+b])*auxsm+1-auxsm);
+	  sorted_struct[k] += rand01() * smalln;
 	} else if(params->dec_f) {
-		sorted_struct[k] = smalln * rand01() + fabs(sm_s[i*q+a][j*q+b]);
+	  sorted_struct[k] = smalln * rand01() + fabs(sm_s[i*q+a][j*q+b]);
 	} else if(params->dec_J) {
-		sorted_struct[k] = smalln * rand01() + fabs(J[i*q+a][j*q+b]);
+	  sorted_struct[k] = smalln * rand01() + fabs(J[i*q+a][j*q+b]);
 	}
 	maxsdkl = max(maxsdkl, sorted_struct[k]);
 	// fprintf(fileout, "J %i %i %i %i %.2e %f %f\n", i, j, a, b, sorted_struct[k], J[i*q+a][j*q+b], sm_s[i*q+a][j*q+b]);
