@@ -1,4 +1,4 @@
-# Adaptive Boltzmann machine learning for Direct Coupling Analysis model
+# Boltzmann machine learning for Potts models of biological data
 
 ## Installation
 
@@ -6,7 +6,7 @@ This code in written in C++ language. To properly install ```adabmDCA```, run
 ```
 make
 ```
-on adabmDCA/src folder. It suffices a ```gcc``` compiler.
+on adabmDCA/src folder. It suffices a ```g++``` compiler.
 
 ## Usage
 This algorithm is able to infer several Max-Ent statistical models of Potts variables given a set of sequences. More precisly, it is able to learn the couplings and the fields parameters of a set of Direct Coupling Analysis (DCA) models given a Multiple Sequence Alignment (MSA) of protein, RNA, binary sequences (for Ising variables) in FASTA format. The learning is performed via a gradient ascent of the likelihood of the data, computed via a Monte Carlo sampling, either using Metropolis or Gibbs steps.
