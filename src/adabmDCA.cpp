@@ -1,4 +1,4 @@
-// BOLTZMANN MACHINE CODE - version of March 13, 2020
+// BOLTZMANN MACHINE CODE - version of November, 2020
 
 
 #include <stdio.h>
@@ -11,6 +11,7 @@
 #include <getopt.h>
 #include <stdbool.h>
 #include <iostream>
+#include <iomanip>
 #include "BMaux.h"
 #include "BMlib.h"
 #include "BMmc.h"
@@ -20,6 +21,8 @@ using namespace std;
 
 int main(int argc, char ** argv) {
 
+
+  cout << setprecision(3);
   /* START INITIALIZATION */
   cout << "****** Boltzmann machine for DCA model ******" << endl;
   Params params;
@@ -53,7 +56,12 @@ int main(int argc, char ** argv) {
     model.sample(data.msa);
     model.compute_errors(data.fm,data.sm,data.cov,errs);
     if(iter % params.nprint == 0) {
-      fprintf(stdout, "it: %i el_time: %li N: %i Teq: %i Twait: %i merr_fm: %.1e merr_sm: %.1e averr_fm: %.1e averr_sm: %.1e cov_err: %.1e corr: %.2f sp: %.1e lrav: %.1e\n", iter, time(NULL)-in_time, params.Nmc_config * params.Nmc_starts, params.Teq, params.Twait, errs.merrh, errs.merrJ, errs.averrh, errs.averrJ, errs.errnorm, model.pearson(data.cov), model.model_sp, lrav);
+      cout << "it: " << iter << " el_time: " << time(NULL)-in_time << " N: " << params.Nmc_config * params.Nmc_starts << " Teq: " << params.Teq << " Twait: " << params.Twait;
+      cout.setf(ios::scientific);
+      cout << " merr_fm: " << errs.merrh << " merr_sm: " << errs.merrJ << " averr_fm: " << errs.averrh << " averr_sm: " << errs.averrJ << " cov_err: " << errs.errnorm;
+      cout.unsetf(ios::scientific);
+      cout << setprecision(3);
+      cout << " corr: " << model.pearson(data.cov) << " sp: " << model.model_sp << " lrav: " << lrav << endl;
       fflush(stdout);
     }
     if(iter > 0 && (iter % params.nprintfile == 0)) {
@@ -79,14 +87,14 @@ int main(int argc, char ** argv) {
     }
     if(errs.errnorm<params.conv && !params.compwise) {
       conv = true;
-      fprintf(stdout,"Reached convergence of error, end of learning\n");
+      cout << "Reached convergence of error, end of learning" << endl;
     }
     if(model.model_sp >= params.sparsity && params.sparsity > 0 && errs.errnorm<params.conv) {
       conv = true;
-      fprintf(stdout,"Reached convergence of error and desired sparsity, end of learning\n");
+      cout << "Reached convergence of error and desired sparsity, end of learning" << endl;
     }
     if (iter >= params.maxiter) {
-      fprintf(stdout,"Reached maximum number of iterations, end of learning\n");
+      cout << "Reached maximum number of iterations, end of learning" << endl;
       conv = true;
     }
     iter++;
@@ -94,14 +102,18 @@ int main(int argc, char ** argv) {
   /* END ITERATION LOOP */
 
   /* FINAL OPERATIONS */
-  fprintf(stdout, "****** Final sampling ******\n");
+  cout << "****** Final sampling ******" << endl;
   fflush(stdout);
   if(!params.maxiter) {
     bool eqmc = false;
     while(!eqmc) {
       eqmc = model.sample(data.msa);
       model.compute_errors(data.fm,data.sm,data.cov,errs);
-      fprintf(stdout, "N: %i Teq: %i Twait: %i merr_fm: %.1e merr_sm: %.1e averr_fm: %.1e averr_sm: %.1e cov_err: %.1e corr: %.2f \n", params.Nmc_config * params.Nmc_starts, params.Teq, params.Twait, errs.merrh, errs.merrJ, errs.averrh, errs.averrJ, errs.errnorm, model.pearson(data.cov));
+      cout << "N: " << params.Nmc_config * params.Nmc_starts << " Teq: " << params.Teq <<  " Twait: " << params.Twait;
+      cout.setf(ios::scientific);
+      cout << " merr_fm: " << errs.merrh << " merr_sm: " << errs.merrJ << " averr_fm: " << errs.averrh << " averr_sm: " << errs.averrJ << " cov_err: " << errs.errnorm ;
+      cout.unsetf(ios::scientific);
+      cout << " corr: " << model.pearson(data.cov) << endl;
       fflush(stdout);
     }
   } else {
@@ -114,24 +126,12 @@ int main(int argc, char ** argv) {
   if(data.tm.size()>0)
     model.compute_third_order_correlations();
   data.print_statistics(sec, first, third, model.fm_s, model.sm_s, model.tm_s);
-  fprintf(stdout, "****** Execution completed ******\n");
+  cout << "****** Execution completed ******" << endl;
+
   fflush(stdout);
   /* FINAL OPERATIONS */
 
   return 0;
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 

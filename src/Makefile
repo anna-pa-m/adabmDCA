@@ -1,9 +1,11 @@
 CFLAGS=-Wall -O3 -g
+CC=g++
+SRC= adabmDCA.cpp BMmc.cpp BMaux.cpp BMlib.cpp
+OBJ=$(SRC:.cpp = -o)
 
 
 
-
-adabmDCA: adabmDCA.cpp
-	g++ ${CFLAGS} adabmDCA.cpp -lm -o $@
+adabmDCA: $(OBJ)
+	$(CC) ${CFLAGS} -o adabmDCA $(OBJ)
 clean:
-	rm -f adabmDCA
+	rm -f adabmDCA *.o
