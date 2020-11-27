@@ -21,8 +21,8 @@ using namespace std;
 
 int main(int argc, char ** argv) {
 
-
-  cout << setprecision(3);
+  
+  cout << setprecision(1);
   /* START INITIALIZATION */
   cout << "****** Boltzmann machine for DCA model ******" << endl;
   Params params;
@@ -56,11 +56,12 @@ int main(int argc, char ** argv) {
     model.sample(data.msa);
     model.compute_errors(data.fm,data.sm,data.cov,errs);
     if(iter % params.nprint == 0) {
+      cout << setprecision(1);
       cout << "it: " << iter << " el_time: " << time(NULL)-in_time << " N: " << params.Nmc_config * params.Nmc_starts << " Teq: " << params.Teq << " Twait: " << params.Twait;
       cout.setf(ios::scientific);
       cout << " merr_fm: " << errs.merrh << " merr_sm: " << errs.merrJ << " averr_fm: " << errs.averrh << " averr_sm: " << errs.averrJ << " cov_err: " << errs.errnorm;
       cout.unsetf(ios::scientific);
-      cout << setprecision(3);
+      cout << setprecision(2);
       cout << " corr: " << model.pearson(data.cov) << " sp: " << model.model_sp << " lrav: " << lrav << endl;
       fflush(stdout);
     }

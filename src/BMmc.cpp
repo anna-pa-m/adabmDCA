@@ -85,7 +85,7 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
 	}
       }
     }
-    cout << neff << "couplings have been removed" << endl;
+    cout << " " << neff << " couplings have been removed" << endl;
     return 0;
   }
   
@@ -179,7 +179,7 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
 	cout <<  "Using Hmmer-like model" << endl;
 	n = L - 1;
       } else if(params->rmgauge) {
-	cout << "Using Potts model with Gauge fixing via cc-decimation" << endl;
+	cout << "Using Potts model with Gauge fixing via cc-decimation:";
 	n = (L*(L-1)*(q-1)*(q-1))/2;
       } else {
 	cout << "Using full Potts model" << endl;
@@ -189,7 +189,7 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
 	for(int j = 0; j < L; j++) {
 	  for(int a = 0; a < q; a++) {
 	    for(int b = 0; b < q; b++) {
-	      decJ[i*q + a][j*q + b] = 1.0;	
+	      decJ[i*q + a][j*q + b] = 1.0;
 	      if(i == j) {
 		decJ[i*q+a][j*q+b] = 0.0;
 		J[i*q+a][j*q+b] = 0.0;
@@ -213,9 +213,10 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
 	  }
 	}
       }
-      if(params->rmgauge) remove_gauge_freedom(cov);
+      if(params->rmgauge) 
+	remove_gauge_freedom(cov);
     } else {
-      cout << "Reading interaction graph from " << params->file_cc << "..." << endl;
+      cout << "Reading interaction graph from " << params->file_cc << "...";
       fflush(stdout);
       FILE *filep;
       if(!(filep = fopen(params->file_cc, "r"))) {
@@ -439,7 +440,8 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
     for (int i=0;i<int(corr.size());i++) 
       fileout <<  i << " " << corr[i] << endl;
     fileout.close();
-    cout<<"End_sampling Teq: "<<params->Teq<<" Twait: "<<params->Twait<<" q_ext: "<<qext<<" +- "<<dqext<<" q_int_1: "<<qin1<<" +- "<<dqin1<<" q_int_2: "<<qin2<<" +- "<<dqin2<<" Test_eq1: "<<test1<<" Test_eq2: "<<test2<<endl;
+    if(params->nprinteq)
+      cout<<"Sampling info: q_ext: "<<qext<<" +- "<<dqext<<" q_int_1: "<<qin1<<" +- "<<dqin1<<" q_int_2: "<<qin2<<" +- "<<dqin2<<" Test_eq1: "<<test1<<" Test_eq2: "<<test2<<endl;
     return eqmc;
   }
 

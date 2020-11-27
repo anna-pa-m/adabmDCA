@@ -53,6 +53,7 @@ Params::Params() {
     tau = 1000; // tau parameter for search and converge (learn_strat = 3)
     seed = 0;
     learn_strat = 0;
+    nprinteq = false;
     nprint = 100;
     nprintfile = 500;
     Teq = 20;
@@ -65,7 +66,7 @@ Params::Params() {
 
   int Params::read_params (int & argc, char ** argv) {
     int c;
-    while ((c = getopt(argc, argv, "a:b:c:d:e:f:g:hi:j:k:l:m:n:o:p:q:r:s:t:u:v:w:x:y:z:ABC:DE:FGHIJ:LMNPQRS:T:UVWX:")) != -1) {
+    while ((c = getopt(argc, argv, "a:b:c:d:e:f:g:hi:j:k:l:m:n:o:p:q:r:s:t:u:v:w:x:y:z:ABC:DE:FGHIJ:KLMNPQRS:T:UVWX:")) != -1) {
 		switch (c) {
 			case 'b':
 				ctype = optarg;
@@ -75,6 +76,9 @@ Params::Params() {
 				break;
 			case 'T':
 				file_3points = optarg;
+				break;
+			case 'K':
+				nprinteq = true;
 				break;
 			case 'C':
 				file_cc = optarg;
@@ -212,50 +216,57 @@ Params::Params() {
 				label = optarg;
 				break;
 			case 'h':
-				cout << "Here's the list of the instructions" << endl;
+				cout << "Here is the list of all the instructions" << endl;
+				cout << "### Basic run ###" << endl;
 				cout << "-f : (file) MSA alignment in FASTA format" << endl;
-				cout << "-q : (file) Read frequencies from file - no MSA" << endl;
-				cout << "-d : (number) Pseudo-count, default: 1/M" << endl;
-				cout << "-b : (letter) Alphabet. " << endl << "  a : amino-acids. " << endl << "  n : nucleic acids. " << endl << "  i : present/absent. " << endl << "  e : epigenetic data. " << endl << "   Default: a" << endl;
-				cout << "-w : (optional input file) weights file" << endl;
-				cout << "-S : (optional output file) file name used to print the MCMC configurations at convergence" << endl;
-				cout << "-E : (optional output file) file name used to print energy's configurations at convergence" << endl;
-				cout << "-T : (optional input file) (i j k a b c) indices for third order correlations" << endl;
-				cout << "-C : (optional input file) (i j a b) or (i j a b corr) input interaction graph" << endl;
-				cout << "-l : (number) Threshold used within the reweighting process, default: " << w_th << endl;
-				cout << "-g : (number) L1 Regularization (J parameters), default :" << regJ1 << endl;
-				cout << "-r : (number) L2 Regularization (J parameters), default : " << regJ2 << endl;
+				cout << "-b : (letter) Alphabet. " << endl << "\ta : amino-acids. " << endl << "\tn : nucleic acids. " << endl << "\ti : present/absent. " << endl << "\te : epigenetic data. " << endl << "\tDefault: a" << endl;
 				cout << "-k : (string) Label used in output files" << endl;
-				cout << "-x : (number) Required sparsity. Add -B for block-wise decimation or -W for component-wise decimation. Default: 1.0" << endl;
-				cout << "-X : (number) Decimate every x steps even if not converged. Default: infinite" << endl;
-				cout << "-B : (flag) A block-wise decimation is applied to the couplings (NOT IMPLEMENTED). Default: false" << endl;
-				cout << "-W : (flag) A component-wise decimation is applied to the couplings using the symKL. Default: false" << endl << " use -U (flag) to use frequencies instead" << endl << " use -V (flag) to use couplings instead" << endl;
+				cout << "-c : (number) Convergence tolerance, default: " << conv << endl;
+				cout << "-i : (number) Maximum number of iterations, default: " << maxiter << endl;
+				cout << "-l : (number) Threshold used within the reweighting process, default: " << w_th << endl;
+				cout << "-d : (number) Pseudo-count, default: 1/Meff" << endl;
+				cout << "### Additional I/O files ###" << endl;
+				cout << "-q : (file) Read frequencies from file - no MSA" << endl;
+				cout << "-w : (file) weights file" << endl;
+				cout << "-p : (file) Initial parameters J, h" << endl;
+				cout << "-S : (file) file name used to print the MCMC configurations at convergence" << endl;
+				cout << "-E : (file) file name used to print energy's configurations at convergence" << endl;
+				cout << "-T : (file) (i j k a b c) indices for third order correlations" << endl;
+				cout << "-C : (file) (i j a b) or (i j a b corr) input interaction graph" << endl;
+				cout << "-m : (number) Print temporary Frobenius norms and parameters every x iterations, default: " << nprintfile << endl;
+				cout << "-F : (flag) Do not overwrite temporary output" << endl;
+				cout << "### Settings of the learning ###" << endl;
+			        cout << "-e : (number) Initial MC equilibration time (in MCsweeps), default: " << Teq << endl;
+				cout << "-t : (number) Initial sampling time of MC algorithm (in MCsweeps), default: " << Twait << endl;
+				cout << "-s : (number) Number of the Metropolis chains, default: " << Nmc_starts << endl;
+				cout << "-n : (number) Number of MC sampled configurations per chain, default: " << Nmc_config << endl;
+				cout << "-g : (number) L1 Regularization (J parameters), default: " << regJ1 << endl;
+				cout << "-r : (number) L2 Regularization (J parameters), default: " << regJ2 << endl;
 				cout << "-R : (flag) Zero J,H initialization" << endl;
 				cout << "-I : (flag) Indipendent model initialization" << endl;
 				cout << "-A : (flag) Remove gauge-invariance" << endl;
-				cout << "-D : (flag) DGap model: Only the first moments of the gap statistics are fitted" << endl;
-				cout << "-N : (flag) GapNN model: Fit the first moments and the nearest-neighbors second moments gap statistics" << endl;
-				cout << "-H : (flag) Hmmer-like model: profile + couplings(gap, gap) for nearest-neighbours" << endl;
 				cout << "-G : (flag) Using Gibbs sampling" << endl;
 				cout << "-M : (flag) Using Metropolis-Hastings sampling" << endl;
 				cout << "-P : (flag) Use persistent MC chains" << endl;
 				cout << "-Q : (flag) Initialize MC chains in data points" << endl;
-				cout << "-y : (number) Seed of random number generator, default: " << seed << endl;
-				cout << "-s : (number) Number of the Metropolis chains, default: " << Nmc_starts << endl;
-				cout << "-n : (number) Number of MC sampled configurations per chain, default: " << Nmc_config << endl;
-				cout << "-p : (optional file) Initial parameters J, h" << endl;
-				cout << "-J : (number) Rescale initial parameters J (not h) by argument, default: " << beta << endl;
-				cout << "-c : (number) Convergence tolerance, default: " << conv << endl;
-			        cout << "-e : (number) Initial MC equilibration time (in MCsweeps), default: " << Teq << endl;
-				cout << "-t : (number) Initial sampling time of MC algorithm (in MCsweeps), default: " << Twait << endl;
 				cout << "-L : (flag) Do not adapt Teq and Twait to achieve equilibration" << endl;
-				cout << "-i : (number) Maximum number of iterations, default: " << maxiter << endl;
-				cout << "-z : (number) Print output every x iterations, default: " << nprint << endl;
-				cout << "-m : (number) Print Frobenius norms and parameters every x iterations, default: " << nprintfile << endl;
-				cout << "-F : (flag) Do not overwrite temporary output" << endl;
 				cout << "-u : (number) Learning rate for couplings, default: " << lrateJ << endl;
 				cout << "-v : (number) Learning rate for fields, default: " << lrateh << endl;
-				cout << "-a : (number) Learning strategy." << " 0: standard gradient descent" << " 1: adagrad" << endl << " 2. RMSprop" << endl << " 3. search then converge" << endl << " 4. adam (currently not implemented)" << endl << " 5. FIRE" << endl << " Default: " << learn_strat << endl;
+				cout << "-a : (number) Learning strategy." << endl << "\t0: standard gradient descent" << endl << "\t1: adagrad" << endl << "\t2. RMSprop" << endl << "\t3. search then converge" << endl << "\t4. adam (currently not implemented)" << endl << "\t5. FIRE" << endl << "\tDefault: " << learn_strat << endl;
+				cout << "### Sparse Potts model ###" << endl;
+				cout << "-x : (number) Required sparsity. Add -B for block-wise decimation or -W for component-wise decimation. Default: 1.0" << endl;
+				cout << "-X : (number) Decimate every x steps even if not converged, default: infinite" << endl;
+				cout << "-B : (flag) A block-wise decimation is applied to the couplings (currently not implemented). Default: false" << endl;
+				cout << "-W : (flag) A component-wise decimation is applied to the couplings using the symKL. Default: false" << endl << "\tadd -U (flag) to use frequencies instead" << endl << "\tadd -V (flag) to use couplings instead" << endl;
+				cout << "### Other max-ent models ###" << endl;
+				cout << "-D : (flag) DGap model: Only the first moments of the gap statistics are fitted" << endl;
+				cout << "-N : (flag) GapNN model: Fit the first moments and the nearest-neighbors second moments gap statistics" << endl;
+				cout << "-H : (flag) Hmmer-like model: profile + couplings(gap, gap) for nearest-neighbours" << endl;
+				cout << "### Miscellaneous ###" << endl;
+				cout << "-y : (number) Seed of random number generator, default: " << seed << endl;
+				cout << "-J : (number) Rescale initial parameters J (not h) by argument, default: " << beta << endl;
+				cout << "-K : (flag) Print information on equilibration, default: " << nprinteq << endl;
+				cout << "-z : (number) Print output every x iterations, default: " << nprint << endl;
 				exit(0);
 			default:
 			        cout << "Incorrect input. Run with -h to get a list of inputs." << endl;
@@ -284,9 +295,9 @@ Params::Params() {
     }
     cout << "Using " << Nmc_starts << " seeds and tot. number of points " << Nmc_starts * Nmc_config << endl;
     if (initdata) {
-      cout << "MC chains are initialized using MSA sequences" << endl;
+      cout << "MC chains are initialized using MSA sequences";
     } else {
-      cout << "MC chains are randomly initialized" << endl;
+      cout << "MC chains are randomly initialized";
     }
     if (persistent) {
       cout << " only at the beginning, and are then persistent" << endl;
@@ -297,7 +308,7 @@ Params::Params() {
     cout << "Learning strategy: " << endl;
     switch(learn_strat) {
     case 0:
-      cout << "Using standard gradient descent with constant learning rate (for J " << lrateJ << " for h " << lrateh << endl;
+      cout << "Using standard gradient descent with constant learning rate (for J " << lrateJ << " for h " << lrateh << " )" << endl;
       break;
     case 1:
       cout << "Using adagrad" << endl;
@@ -323,7 +334,7 @@ Params::Params() {
       }
       cout << "Required sparsity " << sparsity;
       if (!compwise && !blockwise) {
-	cerr << endl << "Please use either -W or -B flags to specify decimation type! EXIT" << endl;
+	cerr << endl << "Please use either -W or -B flags to specify decimation type. EXIT" << endl;
 	exit(EXIT_FAILURE);
       } else if(compwise && !blockwise) {
 	cout << " using (component-wise) ";
@@ -334,7 +345,7 @@ Params::Params() {
 	if(dec_J)
 		cout << "couplings based decimation" << endl;
       } else if (!compwise && blockwise) {
-	cout << " using (block-wise) Kullback-Leibler based decimation -- NOT YET IMPLEMENTED!";
+	cout << " using (block-wise) Kullback-Leibler based decimation -- NOT YET IMPLEMENTED. EXIT";
 	exit(EXIT_FAILURE);
       } else if (compwise && blockwise) {
 	cout << endl << "Please do not use -W and -B flags together! EXIT" << endl;
@@ -400,7 +411,7 @@ Data::Data(Params * _params):
 
   void Data::read_msa() {
     char * filename=params->file_msa;
-    cout << "Reading MSA from" << endl;
+    cout << "Reading MSA from" << params->file_msa << endl;
     FILE * filemsa;
     char ch;
     int readseq = 0, newseq = 0;
@@ -451,10 +462,10 @@ Data::Data(Params * _params):
     char * filename = params->file_w;
     char * label = params->label;
     if(filename) {
-      cout << "Reading weights from file..." << endl;
+      cout << "Reading weights from " << params->file_w << "...";
       FILE *filew;
       if(!(filew = fopen(filename, "r"))) {
-	cerr << "File " << filename << " not found" << endl;
+	cerr << "File " << params->file_w << " not found" << endl;
 	exit(EXIT_FAILURE);
       } else {
 	int i = 0;
@@ -466,7 +477,7 @@ Data::Data(Params * _params):
 	fclose(filew);
       }
     } else {
-      cout << "Computing weights..." << endl;
+      cout << "Computing weights...";
       fflush(stdout);
       ofstream fw;
       char file_w[1000];
@@ -509,7 +520,7 @@ Data::Data(Params * _params):
   }
 
   void Data::compute_empirical_statistics() {
-    cout << "Computing empirical statistics..." << endl;
+    cout << "Computing empirical statistics...";
     fflush(stdout);
     Meff = 0;
     for(int m = 0; m < M; m++) {
