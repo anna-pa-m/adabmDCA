@@ -219,7 +219,7 @@ Params::Params() {
 				cout << "Here is the list of all the instructions" << endl;
 				cout << "### Basic run ###" << endl;
 				cout << "-f : (file) MSA alignment in FASTA format" << endl;
-				cout << "-b : (letter) Alphabet. " << endl << "\ta : amino-acids. " << endl << "\tn : nucleic acids. " << endl << "\ti : present/absent. " << endl << "\te : epigenetic data. " << endl << "\tDefault: a" << endl;
+				cout << "-b : (letter) Alphabet. " << endl << "\ta : amino-acids. " << endl << "\tn : nucleic acids. " << endl << "\ti : Ising " << endl << "\te : epigenetic data. " << endl << "\tDefault: a" << endl;
 				cout << "-k : (string) Label used in output files" << endl;
 				cout << "-c : (number) Convergence tolerance, default: " << conv << endl;
 				cout << "-i : (number) Maximum number of iterations, default: " << maxiter << endl;
@@ -526,24 +526,42 @@ Data::Data(Params * _params):
     for(int m = 0; m < M; m++) {
       Meff += w[m];
       for(int i = 0; i < L; i++) {
-	fm[i*q + msa[m][i]] += w[m];
+	if(!strcmp(params->ctype, "i")) {
+	  fm[i] += w[m] * (2.0*msa[m][i] - 1.0);
+	} else {
+	  fm[i*q + msa[m][i]] += w[m];
+	}
 	for(int j = i+1; j < L; j++) {
-	  sm[i*q + msa[m][i]][j*q + msa[m][j]] += w[m];
+	  if(!strcmp(params->ctype, "i")) {
+	    sm[i][j] += w[m] * (2.0*msa[m][i]-1.0) * (2.0*msa[m][j]-1.0);
+	  } else {
+	    sm[i*q + msa[m][i]][j*q + msa[m][j]] += w[m];
+	  }
 	}
       }
     }
     if(!params->pseudocount)
       params->pseudocount = 1.0/(1+Meff);
     for(int i = 0; i < L*q; i++) {
-      fm[i] = (1-params->pseudocount)*fm[i]/Meff + params->pseudocount/q;
-      sm[i][i] = fm[i];
+      if(!strcmp(params->ctype, "i")) {
+	fm[i] = (1-params->pseudocount)*fm[i]/Meff;
+	sm[i][i] = fm[i];
+      } else {	
+	fm[i] = (1-params->pseudocount)*fm[i]/Meff + params->pseudocount/q;
+	sm[i][i] = fm[i];
+      }
     }
     for(int i = 0; i < L; i++) {
       for(int j = i+1; j < L; j++) {
 	for (int a = 0; a < q; a++) {
 	  for(int b = 0; b < q; b++) {
-	    sm[i*q+a][j*q+b] = (1-params->pseudocount)*sm[i*q+a][j*q+b]/Meff + params->pseudocount/(q*q);
-	    sm[j*q+b][i*q+a] = sm[i*q+a][j*q+b];
+	    if(!strcmp(params->ctype, "i")) {
+	      sm[i][j] = (1-params->pseudocount)*sm[i][j]/Meff;
+	      sm[j][i] = sm[i][j];
+	    } else {
+	      sm[i*q+a][j*q+b] = (1-params->pseudocount)*sm[i*q+a][j*q+b]/Meff + params->pseudocount/(q*q);
+	      sm[j*q+b][i*q+a] = sm[i*q+a][j*q+b];
+	    }
 	  }
 	}
       }
@@ -639,31 +657,50 @@ Data::Data(Params * _params):
 	char buffer[1000];
 	tm_index.clear();
 	tm.clear();
-	vector<int> tmp_vec(6,0);
 	while (!feof(file3) && fgets(buffer, 1000, file3)) {
-	  if(sscanf(buffer, "%d %d %d %d %d %d %lf \n", &i, &j, &k, &a, &b, &c, &value) == 7) {
-	    tmp_vec[0] = i;
-	    tmp_vec[1] = j;
-	    tmp_vec[2] = k;
-	    tmp_vec[3] = a;
-	    tmp_vec[4] = b;
-	    tmp_vec[5] = c;
-	    tm_index.push_back(tmp_vec);
-	    tm.push_back(0.0);	
+	  if(!strcmp(params->ctype, "i")){
+	    vector<int> tmp_vec(3,0);
+	    if(sscanf(buffer, "%d %d %d %lf \n", &i, &j, &k, &value) == 4) {
+	      tmp_vec[0] = i;
+	      tmp_vec[1] = j;
+	      tmp_vec[2] = k;
+	      tm_index.push_back(tmp_vec);
+	      tm.push_back(0.0);
+	    }
+	  } else {
+	    vector<int> tmp_vec(6,0);
+	    if(sscanf(buffer, "%d %d %d %d %d %d %lf \n", &i, &j, &k, &a, &b, &c, &value) == 7) {
+	      tmp_vec[0] = i;
+	      tmp_vec[1] = j;
+	      tmp_vec[2] = k;
+	      tmp_vec[3] = a;
+	      tmp_vec[4] = b;
+	      tmp_vec[5] = c;
+	      tm_index.push_back(tmp_vec);
+	      tm.push_back(0.0);	
+	    }
 	  }
 	}
 	cout << "Number of indices " << (int)tm_index.size() << endl;
 	// compute 3rd order moments of msa, slow!
 	for(int ind =0; ind < int(tm_index.size()); ind++) {
-	  i = tm_index[ind][0];
-	  j = tm_index[ind][1];
-	  k = tm_index[ind][2];
-	  a = tm_index[ind][3];
-	  b = tm_index[ind][4];
-	  c = tm_index[ind][5];
-	  for(int m = 0; m < M; m++) 
-	    if(msa[m][i] == a && msa[m][j] == b && msa[m][k] == c)
-	      tm[ind] += w[m]/Meff;
+	  if(!strcmp(params->ctype, "i")) {
+	    i = tm_index[ind][0];
+	    j = tm_index[ind][1];
+	    k = tm_index[ind][2];
+	    for(int m = 0; m < M; m++)
+	      tm[ind] += w[m]/Meff * (2.0*msa[m][i]-1.0) * (2.0*msa[m][j]-1.0) * (2.0*msa[m][k] -1.0);
+	  } else {
+	    i = tm_index[ind][0];
+	    j = tm_index[ind][1];
+	    k = tm_index[ind][2];
+	    a = tm_index[ind][3];
+	    b = tm_index[ind][4];
+	    c = tm_index[ind][5];
+	    for(int m = 0; m < M; m++) 
+	      if(msa[m][i] == a && msa[m][j] == b && msa[m][k] == c)
+		tm[ind] += w[m]/Meff;
+	  }
 	}
       }
     } else {
@@ -690,33 +727,54 @@ Data::Data(Params * _params):
     ofstream ft;
     fs.open(file_sm);
     ff.open(file_fm);
-    for(int i = 0; i < L; i++) {
-      for(int j = i+1; j < L; j++) {
-	for(int a = 0; a < q; a++) {
-	  for(int b = 0; b < q; b++)
-	    fs << i << " " << j << " " << a << " " << b << " " << sm[i*q+a][j*q+b] << " " << sm_s[i*q+a][j*q+b] << " " << cov[i*q+a][j*q+b] << " " << sm_s[i*q+a][j*q+b]-fm_s[i*q+a]*fm_s[j*q+b] << endl;
+    if(!strcmp(params->ctype, "i")) {
+      for(int i = 0; i <L; i++) {
+	for(int j= i+1; j < L; j++)
+	  fs << i << " " << j << " " << sm[i][j] << " " << sm_s[i][j] << " " << cov[i][j] << " " << sm_s[i][j] - fm_s[i]*fm_s[j] << endl;
+      }
+      for(int i = 0; i < L; i++)
+	ff << i << fm[i] << endl;
+      if(int(tm_index.size())>0) {
+	ft.open(file_tm);
+	int i, j, k;
+	double aux;
+	for(int ind = 0; ind < int(tm_index.size()); ind++) {
+	    i = tm_index[ind][0];
+	    j = tm_index[ind][1];
+	    k = tm_index[ind][2];
+	    aux = tm[ind] - sm[i][j]*fm[k] - sm[i][k]*fm[j] -sm[j][k]*fm[i] +2*fm[i]*fm[j]*fm[k];
+	    ft << i << " " << j << " " << k << aux << " " << tm_s[ind] << endl;
 	}
       }
-    }
-    for(int i = 0; i < L; i++) {
-      for(int a = 0; a < q; a++)
-	ff <<  i << " " << a << " " << fm[i*q+a] << " " << fm_s[i*q+a] << endl;
-    }
-    if(int(tm_index.size())>0) {
-      ft.open(file_tm);
-      int i, j, k, a, b, c;
-      double aux;
-      for(int ind = 0; ind < int(tm_index.size()); ind++) {
-	i = tm_index[ind][0];
-	j = tm_index[ind][1];
-	k = tm_index[ind][2];
-	a = tm_index[ind][3];
-	b = tm_index[ind][4];
-	c = tm_index[ind][5]; 
-	aux = tm[ind] - sm[i*q+a][j*q+b]*fm[k*q+c] - sm[i*q+a][k*q+c]*fm[j*q+b] - sm[j*q+b][k*q+c]*fm[i*q+a] + 2*fm[i*q+a]*fm[j*q+b]*fm[k*q+c];
-	ft << i << " " << j << " " << k << " " << a << " " << b << " " << c << " " << aux << " " << tm_s[ind] << endl;
+    } else {
+      for(int i = 0; i < L; i++) {
+	for(int j = i+1; j < L; j++) {
+	  for(int a = 0; a < q; a++) {
+	    for(int b = 0; b < q; b++)
+	      fs << i << " " << j << " " << a << " " << b << " " << sm[i*q+a][j*q+b] << " " << sm_s[i*q+a][j*q+b] << " " << cov[i*q+a][j*q+b] << " " << sm_s[i*q+a][j*q+b]-fm_s[i*q+a]*fm_s[j*q+b] << endl;
+	  }
+	}
       }
-      ft.close();
+      for(int i = 0; i < L; i++) {
+	for(int a = 0; a < q; a++)
+	  ff <<  i << " " << a << " " << fm[i*q+a] << " " << fm_s[i*q+a] << endl;
+      }
+      if(int(tm_index.size())>0) {
+	ft.open(file_tm);
+	int i, j, k, a, b, c;
+	double aux;
+	for(int ind = 0; ind < int(tm_index.size()); ind++) {
+	  i = tm_index[ind][0];
+	  j = tm_index[ind][1];
+	  k = tm_index[ind][2];
+	  a = tm_index[ind][3];
+	  b = tm_index[ind][4];
+	  c = tm_index[ind][5];
+	  aux = tm[ind] - sm[i*q+a][j*q+b]*fm[k*q+c] - sm[i*q+a][k*q+c]*fm[j*q+b] - sm[j*q+b][k*q+c]*fm[i*q+a] + 2*fm[i*q+a]*fm[j*q+b]*fm[k*q+c];
+	  ft << i << " " << j << " " << k << " " << a << " " << b << " " << c << " " << aux << " " << tm_s[ind] << endl;
+	}
+	ft.close();
+      }
     }
    
   

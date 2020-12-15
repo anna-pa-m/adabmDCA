@@ -38,7 +38,10 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
       vector<int> tmp(L);
       for(int s = 0; s < params->Nmc_starts; s++) {
 	for(int i = 0; i < L; i++) {
-	  tmp[i] = (int)rand() % q;
+	  if(!strcmp(params->ctype, "i"))
+	    tmp[i] = (rand01() > 0.5) ? 1 : 0;
+	  else
+	    tmp[i] = (int)rand() % q;
 	}
 	curr_state.push_back(tmp);
       }
@@ -113,29 +116,51 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
 	while(!feof(filep) && fgets(buffer,100, filep) && sscanf(buffer, "%c ", &c) == 1) {
 	  switch (c) {
 	  case 'J':
-	    sscanf(buffer, "J %d %d %d %d %lf \n", &i, &j, &a, &b, &tmp);
-	    J[i*q + a][j*q + b] = params->beta * tmp;
-	    J[j*q + b][i*q + a] = params->beta * tmp;
+	    if(!strcmp(params->ctype, "i")) {
+	      sscanf(buffer, "J %d %d %lf \n", &i, &j, &tmp);
+	      J[i][j] = params->beta * tmp;
+	      J[j][i] = params->beta * tmp;
+	    } else {
+	      sscanf(buffer, "J %d %d %d %d %lf \n", &i, &j, &a, &b, &tmp);
+	      J[i*q + a][j*q + b] = params->beta * tmp;
+	      J[j*q + b][i*q + a] = params->beta * tmp;
+	    }
 	    break;
 	  case 'j':
-	    sscanf(buffer, "j %d %d %d %d %lf \n", &i, &j, &a, &b, &tmp);
-	    J[i*q + a][j*q + b] = params->beta * tmp;
-	    J[j*q + b][i*q + a] = params->beta * tmp;
+	    if(!strcmp(params->ctype, "i")) {
+	      sscanf(buffer, "j %d %d %lf \n", &i, &i, &tmp);
+	      J[i][j] = params->beta * tmp;
+	      J[j][i] = params->beta * tmp;
+	    } else {
+	      sscanf(buffer, "j %d %d %d %d %lf \n", &i, &j, &a, &b, &tmp);
+	      J[i*q + a][j*q + b] = params->beta * tmp;
+	      J[j*q + b][i*q + a] = params->beta * tmp;
+	    }
 	    break;
 	  case 'H':
-	    sscanf(buffer, "H %d %d %lf \n", &i, &a, &tmp);
-	    h[i*q + a] = tmp;
+	    if(!strcmp(params->ctype, "i")){
+		sscanf(buffer, "H %d %lf \n", &i, &tmp);
+		h[i] = tmp;
+	    } else {
+		sscanf(buffer, "H %d %d %lf \n", &i, &a, &tmp);
+		h[i*q + a] = tmp;
+	    }
 	    break;
 	  case 'h':
-	    sscanf(buffer, "h %d %d %lf \n", &i, &a, &tmp);
-	    h[i*q + a] = tmp;
+	    if(!strcmp(params->ctype, "i")) {
+	      sscanf(buffer, "h %d %lf \n", &i, &tmp);
+	      h[i] = tmp;
+	    } else {
+	      sscanf(buffer, "h %d %d %lf \n", &i, &a, &tmp);
+	      h[i*q + a] = tmp;
+	    }
 	    break;
 	  }
 	}
 	fclose(filep);
       }
       cout << "done" << endl;
-    } else {	  
+    } else {
       for(int i = 0; i < L*q; i++) {
 	h[i] = 0.0;
 	for(int j = i; j < L*q; j++) {
@@ -255,18 +280,29 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
   int Model::print_model(char *filename) {
     ofstream fp;
     fp.open(filename);
-    for(int i = 0; i < L; i++) {
-      for(int j = 0; j < L; j++) if(i < j) {
+    if(!strcmp(params->ctype, "i")) {
+      for(int i = 0; i < L; i++) {
+	for(int j = i+1; j < L; j++) {
+	  fp << "J " << i << " " << j << " " << J[i][j] << endl;
+	}
+      }
+      for(int i = 0; i< L;i++)
+	fp << "h " << i << " " << h[i] << endl;
+    } else {
+      for(int i = 0; i < L; i++) {
+	for(int j = 0; j < L; j++) if(i < j) {
 	  for(int a = 0; a < q; a++) {
 	    for(int b = 0; b < q; b++)
 	      fp << "J " << i << " " <<  j << " " << a << " " << b << " " << J[i*q+a][j*q+b] << endl;
 	  }
 	}
+      }
+      for(int i = 0; i < L; i++) {
+	for(int a = 0; a < q; a++)
+	  fp << "h "  << i << " " <<  a << " " << h[i*q+a] << endl;
+      }
     }
-    for(int i = 0; i < L; i++) {
-      for(int a = 0; a < q; a++)
-	fp << "h "  << i << " " <<  a << " " << h[i*q+a] << endl;
-  }
+  
     fp.close();
     return 0;
   }
@@ -277,16 +313,23 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
   double Model::prof_energy(vector<int> & seq) {
     double en = 0;  
     for(int i = 0; i < L; i++) {
-      en += -h[i*q + seq[i]];
+      if(!strcmp(params->ctype, "i"))
+	en += -h[i] * (2.0*seq[i]-1.0);
+      else
+	en += -h[i*q + seq[i]];
     }
     return en;
   }
 
   double Model::DCA_energy(vector<int> & seq) {
-    double en = 0;  
+    double en = 0;
     for(int i = 0; i < L; i++) {
-      for(int j = i+1; j < L; j++) 
-	en += -J[i*q + seq[i]][j*q +seq[j]];
+      for(int j = i+1; j < L; j++) {
+	if(!strcmp(params->ctype, "i"))
+	  en += -J[i][j] * (2.0*seq[i]-1.0) * (2.0*seq[j]-1.0);
+	else
+	  en += -J[i*q + seq[i]][j*q +seq[j]];
+      }
     }
     return en;
   }
@@ -294,22 +337,41 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
   double Model::energy(vector<int> & seq) {
     double en = 0;  
     for(int i = 0; i < L; i++) {
-      en += -h[i*q + seq[i]];
-      for(int j = i+1; j < L; j++) 
-	en += -J[i*q + seq[i]][j*q +seq[j]];
+      if(!strcmp(params->ctype, "i"))
+	en += -h[i] * (2.0*seq[i]-1.0);
+      else
+	en += -h[i*q + seq[i]];
+      for(int j = i+1; j < L; j++) {
+	if(!strcmp(params->ctype, "i")) 
+	  en += -J[i][j] * (2.0*seq[i]-1.0) * (2.0*seq[j]-1.0);
+	else
+	  en += -J[i*q + seq[i]][j*q +seq[j]];
+       }
     }
     return en;
   }
 
   void Model::metropolis_step(vector<int> & x) {
     int i = (int)rand() % L;
-    int a = (int)rand() % q;
-    while(a == x[i])
-      a = (int)rand() %q;
-    double deltaE = -h[i*q + a] + h[i*q + x[i]];
-    for(int j = 0; j < L; j++) if(j != i) {
+    int a;
+    double deltaE;
+    if(!strcmp(params->ctype, "i")) {
+      a  = (x[i] == 0) ? 1 : 0;
+    } else {
+      a = (int)rand() % q;
+      while(a == x[i])
+	a = (int)rand() %q;
+    }
+    if(!strcmp(params->ctype, "i")) {
+      deltaE = -h[i] * (2.0*a-1.0) + h[i] * (2.0*x[i]-1.0);
+      for(int j = 0; j < L; j++)
+	deltaE += -J[i][j] * (2.0*a-1.0)*(2.0*x[j]-1.0) + J[i][j] * (2.0*x[i]-1.0)*(2.0*x[j]-1.0);
+    } else {
+      deltaE = -h[i*q + a] + h[i*q + x[i]];
+      for(int j = 0; j < L; j++) if(j != i) {
 	deltaE += - J[i*q + a][j*q + x[j]] + J[i*q + x[i]][j*q + x[j]];
       }
+    }
     double p = rand01();
     if (exp(-deltaE) > p) {
       x[i] = a;
@@ -320,17 +382,36 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
     double H, cum[q];
     int i = (int)rand() % L;
     for(int a = 0; a < q; a++) {
-      H = -h[i*q + a];
-      for(int j = 0; j < L; j++) if(j != i) {
+      if(!strcmp(params->ctype, "i")) {
+	H = -h[i] * (2.0*a-1.0);
+	for(int j = 0; j <L; j++) if(i!=j) {
+	  H += -J[i][j] * (2.0*a-1.0) * (2.0*x[j]-1.0);
+	}
+      } else {
+	H = -h[i*q + a];
+	for(int j = 0; j < L; j++) if(j != i) {
 	  H += -J[i*q + a][j*q + x[j]];
 	}
-      if(a==0) cum[a]=exp(-H);
-      else cum[a] = cum[a-1] + exp(-H);
+      }
+      if(a==0) 
+	cum[a]=exp(-H);
+      else 
+	cum[a] = cum[a-1] + exp(-H);
     }
-    double r = cum[q-1]*rand01();
-    int a=0;
-    while(r>cum[a]) {a++;}
-    x[i] = a;
+    if(!strcmp(params->ctype, "i")) {
+      double r = rand01();
+      if(r > cum[0])
+	x[i] = 1;
+      else
+	x[i] = 0;
+    } else {
+      double r = cum[q-1]*rand01();
+      int a=0;
+      while(r>cum[a]) {
+	a++;
+      }
+      x[i] = a;
+    }
   }
 
   void Model::MC_sweep(vector<int> & x) {
@@ -470,12 +551,23 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
   
   void Model::update_statistics(vector<int> & x, std::ofstream & fp, std::ofstream & fe) {
     int Ns = params->Nmc_starts * params->Nmc_config;
-    for(int i = 0; i < L; i++) {
-      fm_s[i*q + x[i]] += 1.0/Ns;
-      sm_s[i*q + x[i]][i*q + x[i]] += 1.0/Ns;
-      for(int j = i+1; j < L; j++) {
-	sm_s[i*q + x[i]][j*q + x[j]] += 1.0/Ns;
-	sm_s[j*q + x[j]][i*q + x[i]] += 1.0/Ns;
+    if(!strcmp(params->ctype, "i")) {
+      for(int i = 0; i<L; i++) {
+	fm_s[i] += 1.0/Ns * (2.0*x[i]-1.0);
+	sm_s[i][i] += 1.0/Ns;
+	for(int j = i+1; j<L;j++) {
+	  sm_s[i][j] += 1.0/Ns * (2.0*x[i]-1.0) * (2.0*x[j]-1.0);
+	  sm_s[j][i] += 1.0/Ns * (2.0*x[j]-1.0) * (2.0*x[i]-1.0);
+	}
+      }
+    } else {
+      for(int i = 0; i < L; i++) {
+	fm_s[i*q + x[i]] += 1.0/Ns;
+	sm_s[i*q + x[i]][i*q + x[i]] += 1.0/Ns;
+	for(int j = i+1; j < L; j++) {
+	  sm_s[i*q + x[i]][j*q + x[j]] += 1.0/Ns;
+	  sm_s[j*q + x[j]][i*q + x[i]] += 1.0/Ns;
+	}
       }
     }
     if(params->file_samples) {
@@ -492,29 +584,45 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
     int i, j, k, a, b, c;
     int Ns = params->Nmc_starts * params->Nmc_config;
     for(int ind = 0; ind < int((*tm_index).size()); ind ++) {
-      i = (*tm_index)[ind][0];
-      j = (*tm_index)[ind][1];
-      k = (*tm_index)[ind][2];
-      a = (*tm_index)[ind][3];
-      b = (*tm_index)[ind][4];
-      c = (*tm_index)[ind][5];
-      if(x[i] == a && x[j] == b && x[k] == c)
-	tm_s[ind] += 1.0/Ns;
+      if(!strcmp(params->ctype, "i")) {
+	i = (*tm_index)[ind][0];
+	j = (*tm_index)[ind][1];
+	k = (*tm_index)[ind][2];
+	tm_s[ind] += 1.0/Ns * (2.0*x[i]-1.0) * (2.0*x[j]-1.0) * (2.0*x[k]-1.0);
+      } else {
+	i = (*tm_index)[ind][0];
+	j = (*tm_index)[ind][1];
+	k = (*tm_index)[ind][2];
+	a = (*tm_index)[ind][3];
+	b = (*tm_index)[ind][4];
+	c = (*tm_index)[ind][5];
+	if(x[i] == a && x[j] == b && x[k] == c) 
+	  tm_s[ind] += 1.0/Ns;
+      }
     }
   }
 
-  void Model::compute_third_order_correlations() {
+ void Model::compute_third_order_correlations() {
     int ind, i, j, k, a, b, c;
-    for(ind = 0; ind < int((*tm_index).size()); ind++) {
-      i = (*tm_index)[ind][0];
-      j = (*tm_index)[ind][1];
-      k = (*tm_index)[ind][2];
-      a = (*tm_index)[ind][3];
-      b = (*tm_index)[ind][4];
-      c = (*tm_index)[ind][5];
-      tm_s[ind] = tm_s[ind] - sm_s[i*q+a][j*q+b]*fm_s[k*q+c] - sm_s[i*q+a][k*q+c]*fm_s[j*q+b] - sm_s[j*q+b][k*q+c]*fm_s[i*q+a] + 2*fm_s[i*q+a]*fm_s[j*q+b]*fm_s[k*q+c]; 
+    if(!strcmp(params->ctype, "i")) {
+      for(ind = 0; ind < int((*tm_index).size()); ind++) {
+	i = (*tm_index)[ind][0];
+	j = (*tm_index)[ind][1];
+	k = (*tm_index)[ind][2];
+	tm_s[ind] = tm_s[ind] - sm_s[i][j]*fm_s[k] - sm_s[i][k]*fm_s[j] - sm_s[j][k]*fm_s[i] + 2*fm_s[i]*fm_s[j]*fm_s[k];
+      }
+    } else {
+      for(ind = 0; ind < int((*tm_index).size()); ind++) {
+	i = (*tm_index)[ind][0];
+	j = (*tm_index)[ind][1];
+	k = (*tm_index)[ind][2];
+	a = (*tm_index)[ind][3];
+	b = (*tm_index)[ind][4];
+	c = (*tm_index)[ind][5];
+	tm_s[ind] = tm_s[ind] - sm_s[i*q+a][j*q+b]*fm_s[k*q+c] - sm_s[i*q+a][k*q+c]*fm_s[j*q+b] - sm_s[j*q+b][k*q+c]*fm_s[i*q+a] + 2*fm_s[i*q+a]*fm_s[j*q+b]*fm_s[k*q+c]; 
     }
   }
+}
 
   
   int Model::compute_errors(vector<double> & fm, vector< vector<double> > & sm, vector< vector<double> > & cov, Errs & errs) {

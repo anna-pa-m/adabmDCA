@@ -284,6 +284,12 @@ int convert_char_ising(char a){
 		case '1':
 			i = 1;
 			break;
+		case 'u':
+			i = 1;
+			break;
+	        case 'd':
+			i = 0;
+			break;
 		default:
 			cerr << a << "not recognized" << endl;
 			return(EXIT_FAILURE);
@@ -304,8 +310,8 @@ int print_alphabet(char * ctype) {
     cout << "Using alphabet: -AUCG" << endl;
     q = 5;
   } else if(!strcmp(ctype, "i")) {
-    cout << "Using alphabet: AP (0,1)" << endl;
-    q = 2;
+    cout << "Using alphabet: {-1,1} spins. Input: AP (absent/present) or ud (down/up) or binary {0,1}" << endl;
+    q = 1;
   } else if(!strcmp(ctype, "e")) {
     cout << "Using alphabet: -AF5TtGEZhBbeRrq \n" << endl;
     q = 16;
@@ -315,7 +321,6 @@ int print_alphabet(char * ctype) {
   }
   return q;
 }
-
 
 
 int print_frobenius_norms(vector<double> & h, vector< vector<double> > & J, int L, int q, char *normfile, char *parfile) {
