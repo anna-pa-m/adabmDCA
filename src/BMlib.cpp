@@ -238,7 +238,7 @@ Params::Params() {
 				cout << "### Settings of the learning ###" << endl;
 			        cout << "-e : (number) Initial MC equilibration time (in MCsweeps), default: " << Teq << endl;
 				cout << "-t : (number) Initial sampling time of MC algorithm (in MCsweeps), default: " << Twait << endl;
-				cout << "-s : (number) Number of the Metropolis chains, default: " << Nmc_starts << endl;
+				cout << "-s : (number) Number of the MC chains, default: " << Nmc_starts << endl;
 				cout << "-n : (number) Number of MC sampled configurations per chain, default: " << Nmc_config << endl;
 				cout << "-g : (number) L1 Regularization (J parameters), default: " << regJ1 << endl;
 				cout << "-r : (number) L2 Regularization (J parameters), default: " << regJ2 << endl;
@@ -733,7 +733,7 @@ Data::Data(Params * _params):
 	  fs << i << " " << j << " " << sm[i][j] << " " << sm_s[i][j] << " " << cov[i][j] << " " << sm_s[i][j] - fm_s[i]*fm_s[j] << endl;
       }
       for(int i = 0; i < L; i++)
-	ff << i << fm[i] << endl;
+	ff << i << " " << fm[i] << endl;
       if(int(tm_index.size())>0) {
 	ft.open(file_tm);
 	int i, j, k;
