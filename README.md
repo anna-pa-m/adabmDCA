@@ -28,5 +28,5 @@ All the possible routines (model choices, decimation procedure, input and output
 ./adabmDCA -h
 ```
 
-For a detailed description see the [documentation](https://github.com/anna-pa-m/adabmDCA/docs/documentation.md) file.
+For a detailed description see the [documentation](https://github.com/anna-pa-m/adabmDCA/blob/master/docs/documentation.md) file.
 
