@@ -3,7 +3,7 @@
 ## Documentation 
 
 ### Basic run
-Let us infer a DCA model, i.e. a Potts model of 21 colors on a fully connected topology, associated the MSA in `test/PF00018.fasta`. The command
+Let us infer a DCA model, i.e. a Potts model of 21 colors on a fully connected topology, associated with the MSA in `test/PF00018.fasta`. The command
 ```
 ./adabmDCA -f ../test/PF00018.fasta -z 1 -m 500 -c 1e-2 
 ```
@@ -34,7 +34,7 @@ Sparsity after initialization: 0
 Printing output every 1 iterations - parameters every 500
 
 ```
-In the early stage of the running, the algorithm performs a reweighting of the original sequences and modifies their statistical significance as explained [here](https://www.pnas.org/content/108/49/E1293); the sequence similarity threshold can be set using `-l` input flag. Besides, it is also possible to give the set of weigths using the flag `-w`. Then, the algorithm computes the data statistics (one and two-site frequencies) and eventually corrects the empirical moments introducing a pseudo-count (read [here](https://journals.aps.org/pre/abstract/10.1103/PhysRevE.90.012132) for details) whose value is set to `1/Meff` and can be modified using `-d`.
+In the early stage of the running, the algorithm performs a reweighting of the original sequences and modifies their statistical significance as explained [here](https://www.pnas.org/content/108/49/E1293); the sequence similarity threshold can be set using `-l` input flag. Besides, it is also possible to give the set of weigths in a file using the flag `-w`. Then, the algorithm computes the data statistics (one and two-site frequencies) and eventually corrects the empirical moments introducing a pseudo-count (read [here](https://journals.aps.org/pre/abstract/10.1103/PhysRevE.90.012132) for details) whose value is set to `1/Meff` and can be modified using `-d`.
 Finally, the algorithm itervatively updates the parameters `(J,h)` of the Potts model by standard gradient ascent (some adaptive learning strategies are described in `Advanced options/Learning strategies`). The model observables are computed from 1000 independent MC chains which, at equilibrium, sample 50 configurations each. The number of MC chains and the number of sampled configurations can be modified by `-s` and `-n` respectively. `adabmDCA` allows for an advanced tuning of the sampling, see `Advanced options/Tuning the Markov Chain Monte Carlo`.
 At every step (the frequency can be specified by the `-z` flag)  it writes to the `stdout` an update of the learning, like the following:
 ```
@@ -72,8 +72,29 @@ where the `s` rows contain the two-site frequencies of the `i j` sites for color
 
 #### Tuning the Markov Chain Monte Carlo
 
-The standard run of this implementation of the Boltzmann learning ensures that the model statistics is estimated using a MCMC sampling performed at equilibrium. To so this, the number of MC sweeps before the first collected configuration, `Twait` and the number of MC sweeps between each pair of sampled configurations, `Twait`, are tuned at each iteration according to the following equilibration test.
+##### Equilibration test
 
+The standard run of this implementation of the Boltzmann learning ensures that the model statistics is estimated using a MCMC sampling performed at equilibrium. To do this the number of MC sweeps between each pair of sampled configurations, `Twait`, is tuned at each iteration, and the number of MC sweeps before the first collected configuration, `Teq`, is set equal to `2Twait`. This last choice is likely to provide a first equilibrium configuration, considering how we fix `Twait`. Let us call the configuration of chain `i` sampled after `n` steps of the MCMC as s<sup>i</sup><sub>n</sub>(Teq + n Twait). For each iteration we compute the average value (among both chains and n) and deviations from them,  of the following quantities:
+
+  - Q<sup>exp</sup> = δ<sub> s<sup>i</sup><sub>n</sub> s<sup>k</sup><sub>n</sub> </sub> 
+  - Q<sup>int,1</sup> = δ<sub> s<sup>i</sup><sub>n</sub> s<sup>i</sup><sub>n+1</sub> </sub>
+  - Q<sup>int,2</sup> = δ<sub> s<sup>i</sup><sub>n</sub> s<sup>i</sup><sub>n+2</sub> </sub>
+  
+  If the overlap between independent chains is not similar to the overlap of two samples in the same chain, distant `2Twait`, i.e. Q<sup>exp</sup> < Q<sup>int,2</sup>, then increase Twait: Twait <- Twait + L
+  If the overlap between independent chains is similar to the intra-chain overlap between two samples at distance `Twait`, i.e. Q<sup>exp</sup> ~ Q<sup>int,1</sup>, then decrease Twait: Twait <- Twait -L
+  
+  If this way, two consecutive samples of the same chain can be slightly correlated but for sure two configurations at distance `2Twait` are reasonably de-correlated. One may assume that even starting from an arbitrary sample and waiting `2Twait`, the final sample would be at equilibrium: this is not proven but very likely the case. Besides, if one uses persistent chains (see below), it is fair to consider the time to equilibrate equals to the de-correlation time.
+  
+  ##### Advanced settings
+  
+  It is possible to avoid the equilibration test and to sample at fixed Teq and Twait using the flags
+  ```
+  -L -e Teq -t Twait
+  ```
+  It is also possible to perform a persistent sampling (flag `-P`), meaning that the chains are initialized as uniformly random configurations only at the first iteration, and then kept persistent. The initial configurations can be extracted from data points using the flag `-Q`.
+  
+  The standard implementation of `adabmDCA` uses as default the Metropolis update rule, but a Gibbs sampling can be used by adding the `-G` flag.
+  
 
 #### Compute non-fitted third order statistics
 
