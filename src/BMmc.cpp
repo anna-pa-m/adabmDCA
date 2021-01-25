@@ -577,6 +577,7 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
     }
     if(params->file_en) {
       fe << prof_energy(x) << " " << DCA_energy(x);
+      fe << endl;
     }
   }
 
