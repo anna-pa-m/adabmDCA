@@ -34,8 +34,8 @@ Sparsity after initialization: 0
 Printing output every 1 iterations - parameters every 500
 
 ```
-In the early stage of the running, the algorithm performs a reweighting of the original sequences and modifies their statistical significance as explained [here](https://www.pnas.org/content/108/49/E1293); the sequence similarity threshold can be set using `-l` input flag. Besides, it is also possible to give the set of weigths in a file using the flag `-w`. Then, the algorithm computes the data statistics (one and two-site frequencies) and eventually corrects the empirical moments introducing a pseudo-count (read [here](https://journals.aps.org/pre/abstract/10.1103/PhysRevE.90.012132) for details) whose value is set to `1/Meff` and can be modified using `-d`.
-Finally, the algorithm itervatively updates the parameters `(J,h)` of the Potts model by standard gradient ascent (some adaptive learning strategies are described in `Advanced options/Learning strategies`). The model observables are computed from 1000 independent MC chains which, at equilibrium, sample 50 configurations each. The number of MC chains and the number of sampled configurations can be modified by `-s` and `-n` respectively. `adabmDCA` allows for an advanced tuning of the sampling, see `Advanced options/Tuning the Markov Chain Monte Carlo`.
+In the early stage of the running, the algorithm performs a reweighting of the original sequences and modifies their statistical significance as explained [here](https://www.pnas.org/content/108/49/E1293); the sequence similarity threshold can be set using `-l` input flag. Besides, it is also possible to give the set of weights in a file using the flag `-w`. Then, the algorithm computes the data statistics (one and two-site frequencies) and eventually corrects the empirical moments introducing a pseudo-count (read [here](https://journals.aps.org/pre/abstract/10.1103/PhysRevE.90.012132) for details) whose value is set to `1/Meff` and can be modified using `-d`.
+Finally, the algorithm iteratively updates the parameters `(J,h)` of the Potts model by standard gradient ascent (some adaptive learning strategies are described in `Advanced options/Learning strategies`). The model observables are computed from 1000 independent MC chains which, at equilibrium, sample 50 configurations each. The number of MC chains and the number of sampled configurations can be modified by `-s` and `-n` respectively. `adabmDCA` allows for advanced tuning of the sampling, see `Advanced options/Tuning the Markov Chain Monte Carlo`.
 At every step (the frequency can be specified by the `-z` flag)  it writes to the `stdout` an update of the learning, like the following:
 ```
 it: 4 el_time: 48 N: 50000 Teq: 12 Twait: 6 merr_fm: 8.8e-01 merr_sm: 8.7e-01 averr_fm: 5.4e-02 averr_sm: 3.4e-03 cov_err: 2.0e-01 corr: 0.0057 sp: 0 lrav: 0.05
@@ -59,10 +59,10 @@ where:
 ### Input/Output files
 
 `adabmDCA` takes as input the set of configuration in [FASTA](https://en.wikipedia.org/wiki/FASTA_format). By default, the program assumes to read protein sequences but the alphabet can be set by using the `-b` flag followed by the letter `n` for RNA sequences or `i` for Ising variables. 
-Notice that for spin configurations the `0` character is interpreted as `-1`.
+Notice that the spin configurations must be reported as `0/1` sequences and the `0` character is interpreted as `-1` by the programm.
 
 Every X iterations (X is specified by `-m X`), and at convergence, `adabmDCA` prints to file the one-site and two-site statistics of the data/model as well as  
-the set of parameters of the Potts model. The files are written respectively as `First_mom_label.dat`, `Sec_mom_label.dat` and `Parameters_label.dat` where `label` is a string that can be modified by the option `-k label`. 
+the set of parameters of the Potts model. The files are written respectively as `First_mom_label.dat`, `Sec_mom_label.dat`, and `Parameters_label.dat` where `label` is a string that can be modified by the option `-k label`. 
 The file `First_mom_label.dat` contains the list of one-site frequencies using the format:
 ```
 i a m_MSA(i,a) m_model(i,a)
@@ -77,7 +77,7 @@ J i j a b value
 ...
 h i a value
 ```
-The gap state `-` is always mapped to `0` color.
+The gap state `-` is always mapped to the `0` color.
 
 #### Additional input - MSA statistics
 
@@ -91,7 +91,7 @@ where the `s` rows contain the two-site frequencies of the `i j` sites for color
 
 ### Initialization of the parameters
 
-By deafault the parameters of the DCA model are all initialized to 0. However, it is possible to inizialize the Boltzmann machine to the set of parameters of the profile model (read [here](https://iopscience.iop.org/article/10.1088/1361-6633/aa9965/meta)) or to give an arbitrary set of parameters stored in a file, using the flag `-p file`. The `file` must be formatted as:
+By default, the parameters of the DCA model are all initialized to 0. However, it is possible to initialize the Boltzmann machine to the set of parameters of the profile model (read [here](https://iopscience.iop.org/article/10.1088/1361-6633/aa9965/meta)) or to give an arbitrary set of parameters stored in a file, using the flag `-p file`. The `file` must be formatted as:
 ```
 J i j a b value
 ...
@@ -101,7 +101,7 @@ h i a value
 
 ### Advanced options
 
-Here is a list of auxiliary functions that can be perfomed by `adabmDCA`.
+Here is a list of auxiliary functions that can be performed by `adabmDCA`.
 
 #### Regularizations
 
@@ -118,10 +118,10 @@ The standard run of this implementation of the Boltzmann machine learning ensure
   - Q<sup>int,1</sup> = δ<sub> s<sup>i</sup><sub>n</sub> s<sup>i</sup><sub>n+1</sub> </sub>
   - Q<sup>int,2</sup> = δ<sub> s<sup>i</sup><sub>n</sub> s<sup>i</sup><sub>n+2</sub> </sub>
   
-  If the overlap between independent chains is not similar to the overlap of two samples in the same chain, distant `2Twait`, i.e. Q<sup>ext</sup> < Q<sup>int,2</sup>, then, we increase Twait: `Twait <- Twait + 1`
-  If the overlap between independent chains is similar to the intra-chain overlap between two samples at distance `Twait`, i.e. Q<sup>ext</sup> ~ Q<sup>int,1</sup>, then, we decrease Twait: `Twait <- Twait - 1`
+  If the overlap between independent chains is not similar to the overlap of two samples in the same chain, distant `2Twait`, i.e. Q<sup>ext</sup> < Q<sup>int,2</sup>, then, we increase Twait: `Twait <- Twait + 1`.
+  If the overlap between independent chains is similar to the intra-chain overlap between two samples at distance `Twait`, i.e. Q<sup>ext</sup> ~ Q<sup>int,1</sup>, then, we decrease Twait: `Twait <- Twait - 1`.
   
-  If this way, two consecutive samples of the same chain can be slightly correlated but for sure two configurations at distance `2Twait` are reasonably de-correlated. One may assume that even starting from an arbitrary sample and waiting `2Twait` sweeps, the final sample would be at equilibrium: this is not proven but very likely the case. Besides, if one uses persistent chains (see below), it is fair to consider the time to equilibrate equals to the de-correlation time.
+  In this way, two consecutive samples of the same chain can be slightly correlated but for sure two configurations at distance `2Twait` are reasonably de-correlated. One may assume that even starting from an arbitrary sample and waiting `2Twait` sweeps, the final sample would be at equilibrium: this is not proven but very likely the case. Besides, if one uses persistent chains (see below), it is fair to consider the time to equilibrate equals to the de-correlation time.
   
 ##### Advanced settings
   
