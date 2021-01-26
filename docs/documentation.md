@@ -3,7 +3,7 @@
 ## Documentation 
 
 ### Basic run
-Let us infer a DCA model, i.e. a Potts model of 21 colors on a fully connected topology, associated with the MSA in `test/PF00018.fasta`. The command
+Let us infer a [DCA model](https://en.wikipedia.org/wiki/Direct_coupling_analysis), i.e. a Potts model of 21 colors on a fully connected topology, associated with the MSA in `test/PF00018.fasta`. The command
 ```
 ./adabmDCA -f ../test/PF00018.fasta -z 1 -m 500 -c 1e-2 
 ```
@@ -58,9 +58,30 @@ where:
   
 ### Input/Output files
 
-#### Raw data
+`adabmDCA` takes as input the set of configuration in [FASTA](https://en.wikipedia.org/wiki/FASTA_format). By default, the program assumes to read protein sequences but the alphabet can be set by using the `-b` flag followed by the letter `n` for RNA sequences or `i` for Ising variables. 
+Notice that for spin configurations the `0` character is interpreted as `-1`.
 
-`adabmDCA` takes as input a FASTA file whose name mus follow the flag `-f` as well as a set of given empirical statistics collected in a file (use `-q` here). In the latter case, the input file must be formatted as
+Every X iterations (X is specified by `-m X`), and at convergence, `adabmDCA` prints to file the one-site and two-site statistics of the data/model as well as  
+the set of parameters of the Potts model. The files are written respectively as `First_mom_label.dat`, `Sec_mom_label.dat` and `Parameters_label.dat` where `label` is a string that can be modified by the option `-k label`. 
+The file `First_mom_label.dat` contains the list of one-site frequencies using the format:
+```
+i a m_MSA(i,a) m_model(i,a)
+```
+where `i` and `a` are the site and color indices, `m_X(i,a)` is the one-site frequency computed using `X`. For the file `Sec_mom_label.dat` we use:
+```
+i j a b s_MSA(i,j,a,b) s_model(i,j,a,b) c_MSA(i,j,a,b) c_model(i,j,a,b)
+```
+where `i j` run over the site indices and `a b` over all pairs of colors; `s_X(i,j,a,b)` and `c_X(i,j,a,b)` are the two-site frequency and the second connected moment, accordin to `X`, computed for positions `i j` and color `a_i = a`,`a_j = b`. The parameters file is structured as:
+```
+J i j a b value
+...
+h i a value
+```
+The gap state `-` is always mapped to `0` color.
+
+#### Additional input - MSA statistics
+
+Alternatively to the set of configurations, `adabmDCA` can directly read a set of given empirical statistics collected in a file (use `-q` here). In the latter case, the input file must be formatted as
 ```
 s i j symbol_i symbol_j value
 ...
@@ -68,33 +89,58 @@ m i symbol_i value
 ```
 where the `s` rows contain the two-site frequencies of the `i j` sites for colors `symbol_i symbol_j` and the `m` lines the empirical one-site frequencies of site `i` for color `symbol_i`. 
 
+### Initialization of the parameters
+
+By deafault the parameters of the DCA model are all initialized to 0. However, it is possible to inizialize the Boltzmann machine to the set of parameters of the profile model (read [here](https://iopscience.iop.org/article/10.1088/1361-6633/aa9965/meta)) or to give an arbitrary set of parameters stored in a file, using the flag `-p file`. The `file` must be formatted as:
+```
+J i j a b value
+...
+h i a value
+
+```
+
 ### Advanced options
+
+Here is a list of auxiliary functions that can be perfomed by `adabmDCA`.
+
+#### Regularizations
+
+
+
 
 #### Tuning the Markov Chain Monte Carlo
 
 ##### Equilibration test
 
-The standard run of this implementation of the Boltzmann learning ensures that the model statistics is estimated using a MCMC sampling performed at equilibrium. To do this the number of MC sweeps between each pair of sampled configurations, `Twait`, is tuned at each iteration, and the number of MC sweeps before the first collected configuration, `Teq`, is set equal to `2Twait`. This last choice is likely to provide a first equilibrium configuration, considering how we fix `Twait`. Let us call the configuration of chain `i` sampled after `n` steps of the MCMC as s<sup>i</sup><sub>n</sub>(Teq + n Twait). For each iteration we compute the average value (among both chains and n) and deviations from them,  of the following quantities:
+The standard run of this implementation of the Boltzmann machine learning ensures that the model statistics is estimated using a MCMC sampling performed at equilibrium. To do this, the number of MC sweeps between each pair of sampled configurations, `Twait`, is tuned at each iteration, and the number of MC sweeps before the first collected configuration, `Teq`, is set equal to `2Twait`. This last choice is likely to provide a first equilibrium configuration, considering how we fix `Twait`. Let us call the configuration of chain `i` sampled after `n` steps of the MCMC as s<sup>i</sup><sub>n</sub>(Teq + n Twait). For each iteration we compute the average value (among both chains and n) and deviations from them,  of the following quantities:
 
-  - Q<sup>exp</sup> = δ<sub> s<sup>i</sup><sub>n</sub> s<sup>k</sup><sub>n</sub> </sub> 
+  - Q<sup>ext</sup> = δ<sub> s<sup>i</sup><sub>n</sub> s<sup>k</sup><sub>n</sub> </sub> 
   - Q<sup>int,1</sup> = δ<sub> s<sup>i</sup><sub>n</sub> s<sup>i</sup><sub>n+1</sub> </sub>
   - Q<sup>int,2</sup> = δ<sub> s<sup>i</sup><sub>n</sub> s<sup>i</sup><sub>n+2</sub> </sub>
   
-  If the overlap between independent chains is not similar to the overlap of two samples in the same chain, distant `2Twait`, i.e. Q<sup>exp</sup> < Q<sup>int,2</sup>, then increase Twait: Twait <- Twait + L
-  If the overlap between independent chains is similar to the intra-chain overlap between two samples at distance `Twait`, i.e. Q<sup>exp</sup> ~ Q<sup>int,1</sup>, then decrease Twait: Twait <- Twait -L
+  If the overlap between independent chains is not similar to the overlap of two samples in the same chain, distant `2Twait`, i.e. Q<sup>ext</sup> < Q<sup>int,2</sup>, then, we increase Twait: `Twait <- Twait + 1`
+  If the overlap between independent chains is similar to the intra-chain overlap between two samples at distance `Twait`, i.e. Q<sup>ext</sup> ~ Q<sup>int,1</sup>, then, we decrease Twait: `Twait <- Twait - 1`
   
-  If this way, two consecutive samples of the same chain can be slightly correlated but for sure two configurations at distance `2Twait` are reasonably de-correlated. One may assume that even starting from an arbitrary sample and waiting `2Twait`, the final sample would be at equilibrium: this is not proven but very likely the case. Besides, if one uses persistent chains (see below), it is fair to consider the time to equilibrate equals to the de-correlation time.
+  If this way, two consecutive samples of the same chain can be slightly correlated but for sure two configurations at distance `2Twait` are reasonably de-correlated. One may assume that even starting from an arbitrary sample and waiting `2Twait` sweeps, the final sample would be at equilibrium: this is not proven but very likely the case. Besides, if one uses persistent chains (see below), it is fair to consider the time to equilibrate equals to the de-correlation time.
   
-  ##### Advanced settings
+##### Advanced settings
   
-  It is possible to avoid the equilibration test and to sample at fixed Teq and Twait using the flags
+  It is possible to avoid the equilibration test and to sample at fixed `Teq` and `Twait` using the flags
   ```
   -L -e Teq -t Twait
   ```
-  It is also possible to perform a persistent sampling (flag `-P`), meaning that the chains are initialized as uniformly random configurations only at the first iteration, and then kept persistent. The initial configurations can be extracted from data points using the flag `-Q`.
+  It is also possible to perform a persistent sampling (flag `-P`), meaning that the chains are initialized as uniformly random configurations only at the first iteration, and then kept persistent, i.e. for the next iterations each chain is initialized to the last configuration of the previous iteration. The initial configurations can be extracted from data samples using the flag `-Q`.
   
   The standard implementation of `adabmDCA` uses as default the Metropolis update rule, but a Gibbs sampling can be used by adding the `-G` flag.
   
+#### Sampling
+
+`adabmDCA` can be easily used to sample a given model. To do this, we can give the parameters file using the flag `-p` and set the maximum number of iterations used for the training as 0, that is `-i 0`. A FASTA or a frequencies input file must be specified also for this procedure. The sampled configurations, and the energies associated with them, are stored in two files whose names must be given using the following flags
+```
+-S sample_file -E energy_file
+```
+
+#### Learning on a fixed topology
 
 #### Compute non-fitted third order statistics
 
