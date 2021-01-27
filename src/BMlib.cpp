@@ -264,7 +264,7 @@ Params::Params() {
 				cout << "-H : (flag) Hmmer-like model: profile + couplings(gap, gap) for nearest-neighbours" << endl;
 				cout << "### Miscellaneous ###" << endl;
 				cout << "-y : (number) Seed of random number generator, default: " << seed << endl;
-				cout << "-J : (number) Rescale initial parameters J (not h) by argument, default: " << beta << endl;
+				cout << "-J : (number) Rescale initial given parameters (J,h) by argument, default: " << beta << endl;
 				cout << "-K : (flag) Print information on equilibration, default: " << nprinteq << endl;
 				cout << "-z : (number) Print output every x iterations, default: " << nprint << endl;
 				exit(0);

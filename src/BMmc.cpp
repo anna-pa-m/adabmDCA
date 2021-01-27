@@ -91,8 +91,7 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
     cout << " " << neff << " couplings have been removed" << endl;
     return 0;
   }
-  
-  
+   
   int Model::initialize_parameters(vector<double> & fm) {        /* {READ J,H FROM FILE} OR {SET J,H=0 OR H=IND.SITE.MODEL} */
     if (params->Metropolis && !params->Gibbs) {
       Gibbs=false;
@@ -140,19 +139,19 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
 	  case 'H':
 	    if(!strcmp(params->ctype, "i")){
 		sscanf(buffer, "H %d %lf \n", &i, &tmp);
-		h[i] = tmp;
+		h[i] = params-> beta*tmp;
 	    } else {
 		sscanf(buffer, "H %d %d %lf \n", &i, &a, &tmp);
-		h[i*q + a] = tmp;
+		h[i*q + a] = params->beta * tmp;
 	    }
 	    break;
 	  case 'h':
 	    if(!strcmp(params->ctype, "i")) {
 	      sscanf(buffer, "h %d %lf \n", &i, &tmp);
-	      h[i] = tmp;
+	      h[i] = params->beta * tmp;
 	    } else {
 	      sscanf(buffer, "h %d %d %lf \n", &i, &a, &tmp);
-	      h[i*q + a] = tmp;
+	      h[i*q + a] = params->beta * tmp;
 	    }
 	    break;
 	  }
@@ -423,12 +422,11 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
   }
 
   valarray<int> Model::mc_chain(vector<int> & x1, vector<int> & x2, valarray<double> & corr) {
-    ofstream fp;
-    ofstream fe;
+    FILE * fp = 0, * fe = 0;
     if(params->file_samples)
-      fp.open(params->file_samples);
+      fp = fopen(params->file_samples, "a");
     if(params->file_en)
-      fe.open(params->file_en);
+      fe = fopen(params->file_en, "a");
     for(int t=0; t < params->Teq; t++) {
       MC_sweep(x1);
       MC_sweep(x2);
@@ -476,9 +474,9 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
       }
     }
     if(params->file_samples)
-      fp.close();
+      fclose(fp);
     if(params->file_en)
-      fp.close();
+      fclose(fe);
     return qs; 
   }
 
@@ -549,7 +547,7 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
     }    
   }
   
-  void Model::update_statistics(vector<int> & x, std::ofstream & fp, std::ofstream & fe) {
+  void Model::update_statistics(vector<int> & x, FILE * fp, FILE * fe) {
     int Ns = params->Nmc_starts * params->Nmc_config;
     if(!strcmp(params->ctype, "i")) {
       for(int i = 0; i<L; i++) {
@@ -572,12 +570,11 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
     }
     if(params->file_samples) {
       for(int i = 0; i < L; i++)
-	fp << x[i] << " ";
-      fp << endl;
+	fprintf(fp, "%d ", x[i]);
+      fprintf(fp, "\n");
     }
     if(params->file_en) {
-      fe << prof_energy(x) << " " << DCA_energy(x);
-      fe << endl;
+      fprintf(fe, "%lf\n", prof_energy(x) + DCA_energy(x));
     }
   }
 

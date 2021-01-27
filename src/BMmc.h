@@ -61,7 +61,7 @@ class Model {
   valarray<int> mc_chain(vector<int> & x1, vector<int> & x2, valarray<double> & corr);
   bool sample(vector< vector<int> > & msa);
   void init_statistics();
-  void update_statistics(vector<int> & x, std::ofstream & fp, std::ofstream & fe);
+  void update_statistics(vector<int> & x, FILE * fp, FILE * fe);
   void update_tm_statistics(vector<int> & x);
   void compute_third_order_correlations();
   int compute_errors(vector<double> & fm, vector< vector<double> > & sm, vector< vector<double> > & cov, Errs & errs);
