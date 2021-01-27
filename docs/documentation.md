@@ -3,7 +3,7 @@
 ## Documentation 
 
 ### Basic run
-Let us infer a [DCA model](https://en.wikipedia.org/wiki/Direct_coupling_analysis), i.e. a Potts model of 21 colors on a fully connected topology, associated with the MSA in `test/PF00018.fasta`. The command
+Let us infer a [DCA model](https://en.wikipedia.org/wiki/Direct_coupling_analysis), i.e. a Potts model of 21 colors on a fully connected topology, associated with the multiple sequence alignment in `test/PF00018.fasta`. This file has been downloaded from [Pfam](http://pfam.xfam.org/) database. The command
 ```
 ./adabmDCA -f ../test/PF00018.fasta -z 1 -m 500 -c 1e-2 
 ```
@@ -135,10 +135,11 @@ The standard run of this implementation of the Boltzmann machine learning ensure
   
 #### Sampling
 
-`adabmDCA` can be easily used to sample a given model. To do this, we can give the parameters file using the flag `-p` and set the maximum number of iterations used for the training as 0, that is `-i 0`. A FASTA or a frequencies input file must be specified also for this procedure. The sampled configurations, and the energies associated with them, are stored in two files whose names must be given using the following flags
+`adabmDCA` can be easily used to sample a given model. To do this, one has to give the parameters file using the flag `-p` and set the maximum number of iterations used for the training as 0, that is `-i 0`. A FASTA or a frequency input file must be specified also for this procedure. The sampled configurations, and the energies associated with them, are stored in two files whose names must be given using the following flags
 ```
 -S sample_file -E energy_file
 ```
+It is also possible to multiply by a constant the set of parameters; use the flag `-J` to this purpose.
 
 #### Learning on a fixed topology
 
