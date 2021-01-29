@@ -1,8 +1,8 @@
 
 
-## Documentation 
+# Documentation 
 
-### Basic run
+## Basic run
 Let us infer a [DCA model](https://en.wikipedia.org/wiki/Direct_coupling_analysis), i.e. a Potts model of 21 colors on a fully connected topology, associated with the multiple sequence alignment in `test/PF00018.fasta`. This file has been downloaded from [Pfam](http://pfam.xfam.org/) database. The command
 ```
 ./adabmDCA -f ../test/PF00018.fasta -z 1 -m 500 -c 1e-2 
@@ -56,7 +56,7 @@ where:
   - `sp:` sparsity of the couplings parameters, i.e. the number of couplings fixed to zero divided by q<sup>2</sup>L(L-1)/2
   - `lrav:` average learning rate
   
-### Input/Output files
+## Input/Output files
 
 `adabmDCA` takes as input the set of configuration in [FASTA](https://en.wikipedia.org/wiki/FASTA_format). By default, the program assumes to read protein sequences; alternative alphabets can be set by using the `-b` flag followed by the letter `n` for RNA sequences or `i` for Ising variables. 
 Notice that the spin configurations must be reported as `0/1` sequences and the `0` character is interpreted as `-1` by the programm.
@@ -83,7 +83,7 @@ i j score
 ```
 The gap state `-` is always mapped to the `0` color.
 
-#### Additional input - MSA statistics
+### Additional input - MSA statistics
 
 Alternatively to the set of configurations, `adabmDCA` can directly read a set of given empirical statistics collected in a file (use `-q` here). In the latter case, the input file must be formatted as
 ```
@@ -93,7 +93,7 @@ m i symbol_i value
 ```
 where the `s` rows contain the two-site frequencies of the `i j` sites for colors `symbol_i symbol_j` and the `m` lines the empirical one-site frequencies of site `i` for color `symbol_i`. 
 
-### Initialization of the parameters
+## Initialization of the parameters
 
 By default, the parameters of the DCA model are all initialized to 0. However, it is possible to initialize the Boltzmann machine to the set of parameters of the profile model (read [here](https://iopscience.iop.org/article/10.1088/1361-6633/aa9965/meta)) or to a set of given parameters stored in a file, using the flag `-p file`. The `file` must be formatted as:
 ```
@@ -103,13 +103,13 @@ h i a value
 
 ```
 
-### Advanced options
+## Advanced options
 
 Here is a list of auxiliary functions that can be performed by `adabmDCA`.
 
-#### Tuning the Markov Chain Monte Carlo
+### Tuning the Markov Chain Monte Carlo
 
-##### Equilibration test
+#### Equilibration test
 
 The standard run of this implementation of the Boltzmann machine learning ensures that the model statistics is estimated using a MCMC sampling performed at equilibrium. To do this, the number of MC sweeps between each pair of sampled configurations, `Twait`, is tuned at each iteration, and the number of MC sweeps before the first collected configuration, `Teq`, is set equal to `2Twait`. This last choice is likely to provide a first equilibrium configuration, considering how we fix `Twait`. Let us call the configuration of chain `i` sampled after `n` steps of the MCMC as s<sup>i</sup><sub>n</sub>(Teq + n Twait). For each iteration we compute the average value (among both chains and n) and deviations from them,  of the following quantities:
 
@@ -122,7 +122,7 @@ The standard run of this implementation of the Boltzmann machine learning ensure
   
   In this way, two consecutive samples of the same chain can be slightly correlated but for sure two configurations at distance `2Twait` are reasonably de-correlated. One may assume that even starting from an arbitrary sample and waiting `2Twait` sweeps, the final sample would be at equilibrium: this is not proven but very likely the case. Besides, if one uses persistent chains (see below), it is fair to consider the time to equilibrate equals to the de-correlation time.
   
-##### Advanced settings
+#### Advanced settings
   
   It is possible to avoid the equilibration test and to sample at fixed `Teq` and `Twait` using the flags
   ```
@@ -132,7 +132,7 @@ The standard run of this implementation of the Boltzmann machine learning ensure
   
   The standard implementation of `adabmDCA` uses as default the Metropolis update rule, but a Gibbs sampling can be used by adding the `-G` flag.
   
-#### Sampling
+### Sampling
 
 `adabmDCA` can be easily used to sample a given model. To do this, one has to give the parameters file using the flag `-p` and set the maximum number of iterations used for the training as 0, that is `-i 0`. A FASTA or a frequency input file must be specified also for this procedure. The sampled configurations, and the energies associated with them, are stored in two files whose names must be given using the following flags
 ```
@@ -140,7 +140,7 @@ The standard run of this implementation of the Boltzmann machine learning ensure
 ```
 It is also possible to multiply by a constant (an inverse-temperature in the statistical physics jargon) the set of parameters; use the flag `-J` to this purpose.
 
-#### Learning on a fixed topology
+### Learning on a fixed topology
 
 The Boltzmann machine learning assumes to learn all the possible couplings associated with a fully connected interaction graph. Alternatively, if the interaction graph is known, one may give to the programm the list of component-wise couplings to be larned. This list must be stored in a `file`, and passed to the programm using `-C file`. The file must be formatted as
 ```
@@ -164,21 +164,21 @@ i j k a b c third_MSA(i,j,k,a,b,c) third_model(i,j,k,a,b,c)
 ```
 where `third_X(i,j,k,a,b,c)` is the third connected moment computed using X of the sites `i ,j ,k` for colors `a_i = a, a_j = b, a_k = c`.
 
-#### Available maximum entropy models
+### Available maximum entropy models
 
 `adabmDCA` gives the possibility of fitting a partial set of observables associated with the `-` symbols. 
 
-#### Regularizations
+### Regularizations
 
 By default, the Boltzmann machine learning does not assume any regularization of the learned parameters. Still, it is possible to add an L1 or L2 regularizations, of strength `lambda`, using the flags `-g lambda` or `-r lambda` respectively.
 
-#### Pruning the couplings
+### Pruning the couplings
 
-##### Remove gauge invariance
+#### Remove gauge invariance
 
-#### Learning strategies
+### Learning strategies
 
-### To do list
+## To do list
 
 Several things:
 
