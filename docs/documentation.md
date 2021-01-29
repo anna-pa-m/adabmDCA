@@ -58,11 +58,11 @@ where:
   
 ### Input/Output files
 
-`adabmDCA` takes as input the set of configuration in [FASTA](https://en.wikipedia.org/wiki/FASTA_format). By default, the program assumes to read protein sequences but the alphabet can be set by using the `-b` flag followed by the letter `n` for RNA sequences or `i` for Ising variables. 
+`adabmDCA` takes as input the set of configuration in [FASTA](https://en.wikipedia.org/wiki/FASTA_format). By default, the program assumes to read protein sequences; alternative alphabets can be set by using the `-b` flag followed by the letter `n` for RNA sequences or `i` for Ising variables. 
 Notice that the spin configurations must be reported as `0/1` sequences and the `0` character is interpreted as `-1` by the programm.
 
 Every X iterations (X is specified by `-m X`), and at convergence, `adabmDCA` prints to file the one-site and two-site statistics of the data/model as well as  
-the set of parameters of the Potts model. The files are written respectively as `First_mom_label.dat`, `Sec_mom_label.dat`, and `Parameters_label.dat` where `label` is a string that can be modified by the option `-k label`. 
+the set of parameters of the Potts model and the (average corrected) Frobenius norms associated with them. The files are written respectively as `First_mom_label.dat`, `Sec_mom_label.dat`, and `Parameters_label.dat`, `Scores_label.dat` where `label` is a string that can be modified by the option `-k label`. 
 The file `First_mom_label.dat` contains the list of one-site frequencies using the format:
 ```
 i a m_MSA(i,a) m_model(i,a)
@@ -76,6 +76,10 @@ where `i j` run over the site indices and `a b` over all pairs of colors; `s_X(i
 J i j a b value
 ...
 h i a value
+```
+while the scores file is organized as:
+```
+i j score
 ```
 The gap state `-` is always mapped to the `0` color.
 
@@ -91,7 +95,7 @@ where the `s` rows contain the two-site frequencies of the `i j` sites for color
 
 ### Initialization of the parameters
 
-By default, the parameters of the DCA model are all initialized to 0. However, it is possible to initialize the Boltzmann machine to the set of parameters of the profile model (read [here](https://iopscience.iop.org/article/10.1088/1361-6633/aa9965/meta)) or to give an arbitrary set of parameters stored in a file, using the flag `-p file`. The `file` must be formatted as:
+By default, the parameters of the DCA model are all initialized to 0. However, it is possible to initialize the Boltzmann machine to the set of parameters of the profile model (read [here](https://iopscience.iop.org/article/10.1088/1361-6633/aa9965/meta)) or to a set of given parameters stored in a file, using the flag `-p file`. The `file` must be formatted as:
 ```
 J i j a b value
 ...
@@ -102,11 +106,6 @@ h i a value
 ### Advanced options
 
 Here is a list of auxiliary functions that can be performed by `adabmDCA`.
-
-#### Regularizations
-
-
-
 
 #### Tuning the Markov Chain Monte Carlo
 
@@ -129,7 +128,7 @@ The standard run of this implementation of the Boltzmann machine learning ensure
   ```
   -L -e Teq -t Twait
   ```
-  It is also possible to perform a persistent sampling (flag `-P`), meaning that the chains are initialized as uniformly random configurations only at the first iteration, and then kept persistent, i.e. for the next iterations each chain is initialized to the last configuration of the previous iteration. The initial configurations can be extracted from data samples using the flag `-Q`.
+  It is also possible to perform a persistent sampling (flag `-P`), meaning that the chains are initialized as uniformly random configurations only at the first iteration, and then kept persistent, i.e. for the next iterations each chain is initialized to the last configuration of the previous iteration. The initial configurations can be extracted from empirical samples using the flag `-Q`.
   
   The standard implementation of `adabmDCA` uses as default the Metropolis update rule, but a Gibbs sampling can be used by adding the `-G` flag.
   
@@ -139,15 +138,33 @@ The standard run of this implementation of the Boltzmann machine learning ensure
 ```
 -S sample_file -E energy_file
 ```
-It is also possible to multiply by a constant the set of parameters; use the flag `-J` to this purpose.
+It is also possible to multiply by a constant (an inverse-temperature in the statistical physics jargon) the set of parameters; use the flag `-J` to this purpose.
 
 #### Learning on a fixed topology
 
+The Boltzmann machine learning assumes to learn all the possible couplings associated with a fully connected interaction graph. Alternatively, if the interaction graph is known, one may give to the programm the list of component-wise couplings to be larned. This list must be stored in a `file`, and passed to the programm using `-C file`. The file must be formatted as
+```
+i j a b
+```
+or 
+```
+i j a b value
+```
+where value is some kind of measurement associated with the tuple `(i,j,a,b)`. This latter format encompasses the possibility of a priori determined a fixed topology from a statistical measure (i.e. connected correlations) and to directly give the list to `adabmDCA` (the `value` column is not used by the Boltzmann machine learning and can be omitted).
+
 #### Compute non-fitted third order statistics
+
+
 
 #### Available maximum entropy models
 
+#### Regularizations
+
+By default, the Boltzmann machine learning does not assume any regularization of the learned parameters. Still, it is possible to add an L1 or L2 regularizations, of strength `lambda`, using the flags `-g lambda` or `-r lambda` respectively.
+
 #### Pruning the couplings
+
+##### Remove gauge invariance
 
 #### Learning strategies
 
