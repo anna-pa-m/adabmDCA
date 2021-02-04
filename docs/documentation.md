@@ -95,7 +95,7 @@ where the `s` rows contain the two-site frequencies of the `i j` sites for color
 
 ## Initialization of the parameters
 
-By default, the parameters of the DCA model are all initialized to 0. However, it is possible to initialize the Boltzmann machine to the set of parameters of the profile model (read [here](https://iopscience.iop.org/article/10.1088/1361-6633/aa9965/meta)) or to a set of given parameters stored in a file, using the flag `-p file`. The `file` must be formatted as:
+By default, the parameters of the DCA model are all initialized to 0. However, it is possible to initialize the Boltzmann machine to the set of parameters of the profile model (read [here](https://iopscience.iop.org/article/10.1088/1361-6633/aa9965/meta)) using the flag `-I` or to a set of given parameters stored in a file, using the flag `-p file`. The `file` must be formatted as:
 ```
 J i j a b value
 ...
@@ -111,7 +111,8 @@ Here is a list of auxiliary functions that can be performed by `adabmDCA`.
 
 #### Equilibration test
 
-The standard run of this implementation of the Boltzmann machine learning ensures that the model statistics is estimated using a MCMC sampling performed at equilibrium. To do this, the number of MC sweeps between each pair of sampled configurations, `Twait`, is tuned at each iteration, and the number of MC sweeps before the first collected configuration, `Teq`, is set equal to `2Twait`. This last choice is likely to provide a first equilibrium configuration, considering how we fix `Twait`. Let us call the configuration of chain `i` sampled after `n` steps of the MCMC as s<sup>i</sup><sub>n</sub>(Teq + n Twait). For each iteration we compute the average value (among both chains and n) and deviations from them,  of the following quantities:
+The standard run of this implementation of the Boltzmann machine learning ensures that the model statistics is estimated using a MCMC sampling performed at equilibrium. To do this, the number of MC sweeps between each pair of sampled configurations, `Twait`, is tuned at each iteration, and the number of MC sweeps before the first collected configuration, `Teq`, is set equal to `2Twait`. This last choice is likely to provide a first well equilibrated configuration. 
+Let us call the configuration of chain `i` sampled after `n` steps of the MCMC as s<sup>i</sup><sub>n</sub>(Teq + n Twait). For each iteration we compute the average value (among both chains and `n`) and deviations from them,  of the following quantities, the so-called overlaps:
 
   - Q<sup>ext</sup> = δ<sub> s<sup>i</sup><sub>n</sub> s<sup>k</sup><sub>n</sub> </sub> 
   - Q<sup>int,1</sup> = δ<sub> s<sup>i</sup><sub>n</sub> s<sup>i</sup><sub>n+1</sub> </sub>
