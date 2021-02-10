@@ -168,12 +168,21 @@ where `third_X(i,j,k,a,b,c)` is the third connected moment computed using X of t
 ### Available maximum entropy models
 
 `adabmDCA` gives the possibility of fitting a partial set of observables associated with the `-` symbols. 
+WIP
 
 ### Regularizations
 
 By default, the Boltzmann machine learning does not assume any regularization of the learned parameters. Still, it is possible to add an L1 or L2 regularizations, of strength `lambda`, using the flags `-g lambda` or `-r lambda` respectively.
 
 ### Pruning the couplings
+
+In `adabmDCA` it is possible to run several procedures to prune the couplings of the fully connected Potts model up to a desired sparsity, specified using `-x value`. At convergence of the fully connected model, or alternatively every X iteration (use `-X value` here), `adabmDCA` computes a score associated with each non-zero coupling and prune the 1% of these parameters showing the lowest scores. 
+There are three choices for the score: 
+  - the empirical frequency `s_MSA(i,j,a,b)`associated with `J(i,j,a,b)` (`-U` flag)
+  - the absolute value of the coupling `J(i,j,a,b)` (use `-V` flag) 
+  - the symmetric Kullbak-Leibler distance between the models with or without a coupling. 
+  
+The recommended procedure is the last one which corresponds to an information-based and component-wise pruning, achievable using the `-W` flag. A block-wise pruning can be set using `-B` (not yet implemented). For more details about the procedure and the performances of the pruned models, see [arXiv](https://arxiv.org/abs/2011.11259). 
 
 #### Remove gauge invariance
 
