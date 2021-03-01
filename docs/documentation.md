@@ -167,8 +167,15 @@ where `third_X(i,j,k,a,b,c)` is the third connected moment computed using X of t
 
 ### Available maximum entropy models
 
-`adabmDCA` gives the possibility of fitting a partial set of observables associated with the `-` symbols. 
-WIP
+`adabmDCA` gives the possibility of fitting a partial set of observables associated with the `-` symbols; one possibility is the so-called `pseudo Hidden Markov Model` (see [Phys. Rev. E](https://link.aps.org/doi/10.1103/PhysRevE.102.062409))
+
+<img src="https://latex.codecogs.com/gif.latex?\mathcal{H}_{phmm}(\boldsymbol{S}&space;|&space;\boldsymbol{J},&space;\boldsymbol{h})&space;=&space;-&space;\sum_{i,i&plus;1}J_{i,i&plus;1}(-,-)&space;\delta_{S_i,-}&space;\delta_{S_{i&plus;1},-}&space;-&space;\sum_{i}h_{i}(S_{i})" title="\mathcal{H}_{phmm}(\boldsymbol{S} | \boldsymbol{J}, \boldsymbol{h}) = - \sum_{i,i+1}J_{i,i+1}(-,-) \delta_{S_i,-} \delta_{S_{i+1},-} - \sum_{i}h_{i}(S_{i})" />
+
+to be set using `-H` flag. A second one is the `nearest-neighbors gaps` model defined as
+
+<img src="https://latex.codecogs.com/gif.latex?\inline&space;\mathcal{H}_{dgap}(\boldsymbol{S}&space;|&space;\boldsymbol{J},&space;\boldsymbol{h})&space;=&space;-\sum_{i}&space;h_{i}&space;(S_{i})&space;-\sum_{i<j}J_{ij}(S_i,S_j)&space;(1&space;-&space;\delta_{S_{i},-})&space;(1&space;-&space;\delta_{S_{j},-})&space;-&space;\sum_{i,i&plus;1}&space;J_{i,i&plus;1}&space;(-,&space;-)&space;\delta_{S_{i},-}&space;\delta_{S_{i&plus;1},-}" title="\mathcal{H}_{dgap}(\boldsymbol{S} | \boldsymbol{J}, \boldsymbol{h}) = -\sum_{i} h_{i} (S_{i}) -\sum_{i<j}J_{ij}(S_i,S_j) (1 - \delta_{S_{i},-}) (1 - \delta_{S_{j},-}) - \sum_{i,i+1} J_{i,i+1} (-, -) \delta_{S_{i},-} \delta_{S_{i+1},-}" />
+
+whose corresponding input flag is `-N`.
 
 ### Regularizations
 
@@ -186,14 +193,8 @@ The recommended procedure is the last one which corresponds to an information-ba
 
 #### Remove gauge invariance
 
-### Learning strategies
+Each pruning strategy described above breaks the gauge invariance of the target Potts model. To start the learning in a fixed gauge, we propose to initially set to 0 a subset of the couplings determined as follows. For each `q x q` coupling matrix `J(i,j)`, we sort the associated connected second moments `c(i,j,a,b)`. Then for the `2q-1` couples of colors `(a.b)` having the smallest connected moments, we set `J(i,j,a,b) = 0`.
 
-## To do list
-
-Several things:
-
-  - implement ```adam``` learning strategy
-  - parallelization of the MCMC
 
 
 
