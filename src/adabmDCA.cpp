@@ -1,4 +1,5 @@
-// BOLTZMANN MACHINE CODE - version of November, 2020
+// BOLTZMANN MACHINE CODE - version of March, 2021
+// Authors: Anna Paola Muntoni and Francesco Zamponi
 
 
 #include <stdio.h>
