@@ -1,9 +1,5 @@
 # Adaptive Boltzmann machine learning for Potts models of biological data
 
-## Authors
-
-Anna Paola Muntoni and Francesco Zamponi
-
 ## Description
 
 This is an implementation of the Boltzmann machine learning to infer several maximum-entropy statistical models of Potts or Ising variables given a set of observables. More precisely, it infers the couplings and the fields of a set of generalized Direct Coupling Analysis (DCA) models given a Multiple Sequence Alignment (MSA) of protein or RNA sequences. It is also possible to infer an Ising model from a set of spin configurations. The learning is performed via a gradient ascent of the likelihood of the data in which the model observables are computed via a Markov Chain Monte Carlo (MCMC) sampling.
