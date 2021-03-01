@@ -173,7 +173,7 @@ where `third_X(i,j,k,a,b,c)` is the third connected moment computed using X of t
 
 to be set using `-H` flag. A second one is the `nearest-neighbors gaps` model defined as
 
-<img src="https://latex.codecogs.com/gif.latex?\inline&space;\mathcal{H}_{nng}(\boldsymbol{S}&space;|&space;\boldsymbol{J},&space;\boldsymbol{h})&space;=&space;-\sum_{i}&space;h_{i}&space;(S_{i})&space;-\sum_{i<j}J_{ij}(S_i,S_j)&space;(1&space;-&space;\delta_{S_{i},-})&space;(1&space;-&space;\delta_{S_{j},-})&space;-&space;\sum_{i,i&plus;1}&space;J_{i,i&plus;1}&space;(-,&space;-)&space;\delta_{S_{i},-}&space;\delta_{S_{i&plus;1},-}" title="\mathcal{H}_{dgap}(\boldsymbol{S} | \boldsymbol{J}, \boldsymbol{h}) = -\sum_{i} h_{i} (S_{i}) -\sum_{i<j}J_{ij}(S_i,S_j) (1 - \delta_{S_{i},-}) (1 - \delta_{S_{j},-}) - \sum_{i,i+1} J_{i,i+1} (-, -) \delta_{S_{i},-} \delta_{S_{i+1},-}" />
+<img src="https://latex.codecogs.com/gif.latex?\mathcal{H}_{nng}(\boldsymbol{S}&space;|&space;\boldsymbol{J},&space;\boldsymbol{h})&space;=&space;-&space;\sum_{i}&space;h_{i}&space;(S_{i})&space;-&space;\sum_{i<j}J_{ij}(S_i,S_j)&space;(1&space;-&space;\delta_{S_{i},-})&space;(1&space;-&space;\delta_{S_{j},-})&space;-&space;\sum_{i,i&plus;1}&space;J_{i,i&plus;1}&space;(-,&space;-)&space;\delta_{S_{i},-}&space;\delta_{S_{i&plus;1},-}" title="\mathcal{H}_{nng}(\boldsymbol{S} | \boldsymbol{J}, \boldsymbol{h}) = - \sum_{i} h_{i} (S_{i}) - \sum_{i<j}J_{ij}(S_i,S_j) (1 - \delta_{S_{i},-}) (1 - \delta_{S_{j},-}) - \sum_{i,i+1} J_{i,i+1} (-, -) \delta_{S_{i},-} \delta_{S_{i+1},-}" />
 
 whose corresponding input flag is `-N`.
 
