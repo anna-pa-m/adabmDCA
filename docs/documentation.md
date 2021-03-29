@@ -59,10 +59,9 @@ where:
 ## Input/Output files
 
 `adabmDCA` takes as input the set of configuration in [FASTA](https://en.wikipedia.org/wiki/FASTA_format). By default, the program assumes to read protein sequences; alternative alphabets can be set by using the `-b` flag followed by the letter `n` for RNA sequences or `i` for Ising variables. 
-Notice that the spin configurations must be reported as `0/1` sequences and the `0` character is interpreted as `-1` by the programm.
+Notice that the spin configurations must be reported as `0/1` sequences and the `0` character is interpreted as `-1` by the program.
 
-Every X iterations (X is specified by `-m X`), and at convergence, `adabmDCA` prints to file the one-site and two-site statistics of the data/model as well as  
-the set of parameters of the Potts model and the (average corrected) Frobenius norms associated with them. The files are written respectively as `First_mom_label.dat`, `Sec_mom_label.dat`, and `Parameters_label.dat`, `Scores_label.dat` where `label` is a string that can be modified by the option `-k label`. 
+Every X iterations (X is specified by `-m X`), and at convergence, `adabmDCA` prints to file the one-site and two-site statistics of the data/model as well as the set of parameters of the Potts model and the (average corrected) Frobenius norms associated with them. The files are written respectively as `First_mom_label.dat`, `Sec_mom_label.dat`, and `Parameters_label.dat`, `Scores_label.dat` where `label` is a string that can be modified by the option `-k label`. 
 The file `First_mom_label.dat` contains the list of one-site frequencies using the format:
 ```
 i a m_MSA(i,a) m_model(i,a)
