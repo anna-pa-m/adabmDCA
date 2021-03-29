@@ -154,7 +154,7 @@ where value is some kind of measurement associated with the tuple `(i,j,a,b)`. T
 
 ### Compute non-fitted third order statistics
 
-At convergence, the model returned by `adabmDCA` fits, up to the convergence error, the one-site and two-site data statistics. To facilitate the testing on the generative properties of the learned model, it is possible to give to the programm a list of tuple `(i,j,k,a,b,c)` on which the data and model third order connected moments are computed and printed to an output file `Third_mom_label.dat`. The list must satisfy the format
+At convergence, the model returned by `adabmDCA` fits, up to the convergence error, the one-site and two-site data statistics. To facilitate the testing on the generative properties of the learned model, it is possible to give to the program a list of tuple `(i,j,k,a,b,c)` on which the data and model third order connected moments are computed and printed to an output file `Third_mom_label.dat`. The list must satisfy the format
 ```
 i j k a b c
 ```
