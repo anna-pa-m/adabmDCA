@@ -38,11 +38,11 @@ class Data {
   int q, L, M;
   double Meff;
   vector< vector<int> > msa;
-  vector<double> w;
-  vector<double> fm;
-  vector< vector<double> > sm;
-  vector< vector<double> > cov;
-  vector<double> tm; // Pay attention. File contains connected 3rd order correlations
+  vector<float> w;
+  vector<float> fm;
+  vector< vector<float> > sm;
+  vector< vector<float> > cov;
+  vector<float> tm; // Pay attention. File contains connected 3rd order correlations
   vector< vector<int> > tm_index;
   Params * params;
 
@@ -60,7 +60,7 @@ class Data {
   /******************** METHODS FOR OUTPUT ***********************************************************/
   
   void print_msa(char *filename);
-  int print_statistics(char *file_sm, char *file_fm, char *file_tm, vector<double> & fm_s, vector< vector<double> > & sm_s, vector<double> & tm_s); 
+  int print_statistics(char *file_sm, char *file_fm, char *file_tm, vector<float> & fm_s, vector< vector<float> > & sm_s, vector<float> & tm_s); 
    
 };
 

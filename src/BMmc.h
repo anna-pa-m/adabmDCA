@@ -32,11 +32,12 @@ class Model {
   public:
   int q, L;
   vector< vector<int> > curr_state;
-  vector<double> h, Gh;
-  vector< vector<double> > J, decJ, GJ;
-  vector<double> fm_s;
-  vector< vector<double> > sm_s;
-  vector<double> tm_s;
+  vector<float> h, Gh;
+  vector< vector<float> > J, GJ;
+  vector< vector<unsigned char > > decJ;
+  vector<float> fm_s;
+  vector< vector<float> > sm_s;
+  vector<float> tm_s;
   vector< vector<int> > * tm_index;
   bool Gibbs;
   Params * params;
@@ -45,14 +46,14 @@ class Model {
   double model_sp;
   vector< vector<int> > idx;
   vector<int> tmp_idx;
-  vector<double> sorted_struct;
+  vector<float> sorted_struct;
 
   Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int _ntm, vector< vector<int> > * _tm_index);
 
   void init_current_state(vector< vector<int> > & msa);
-  int remove_gauge_freedom(vector< vector<double> > & cov);
-  int initialize_parameters(vector<double> & fm);
-  void initial_decimation(vector< vector<double> > & cov);
+  int remove_gauge_freedom(vector< vector<float> > & cov);
+  int initialize_parameters(vector<float> & fm);
+  void initial_decimation(vector< vector<float> > & cov);
   int print_model(char *filename);
   double prof_energy(vector<int> & seq);
   double DCA_energy(vector<int> & seq);
@@ -66,15 +67,16 @@ class Model {
   void update_statistics(vector<int> & x, FILE * fp, FILE * fe);
   void update_tm_statistics(vector<int> & x);
   void compute_third_order_correlations();
-  int compute_errors(vector<double> & fm, vector< vector<double> > & sm, vector< vector<double> > & cov, Errs & errs);
-  double pearson(vector< vector<double> > & cov);
-  double update_parameters(vector<double> & fm, vector< vector<double> > & sm, int iter);
+  int compute_errors(vector<float> & fm, vector< vector<float> > & sm, vector< vector<float> > & cov, Errs & errs);
+  double pearson(vector< vector<float> > & cov);
+  double update_parameters(vector<float> & fm, vector< vector<float> > & sm, int iter);
   int n_links();
   void init_decimation_variables();
   int decimate_compwise(int c, int iter);
 
 
 };
+
 
 #endif
 

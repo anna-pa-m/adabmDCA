@@ -21,7 +21,7 @@ using namespace std;
 
 
 Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int _ntm, vector< vector<int> > * _tm_index):
-  q(_q),L(_L),h(L*q,0),J(L*q,h),decJ(L*q,h),fm_s(L*q,0),sm_s(L*q,fm_s),tm_s(_ntm,0),tm_index(_tm_index),Gibbs(false),params(_params),alpha(0.1),acc(1),counter(0),model_sp(0) {
+  q(_q),L(_L),h(L*q,0),J(L*q,h),decJ(L*q,vector<unsigned char>(L*q,0)),fm_s(L*q,0),sm_s(L*q,fm_s),tm_s(_ntm,0),tm_index(_tm_index),Gibbs(false),params(_params),alpha(0.1),acc(1),counter(0),model_sp(0) {
     init_current_state(msa);
     if (params->learn_strat == 1 || params->learn_strat == 2 || params->learn_strat == 5) {
       Gh.clear();
@@ -60,8 +60,8 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
     }
   }
 
-  int Model::remove_gauge_freedom(vector< vector<double> > & cov) {
-    vector<double> sorted_matrix(q*q,0);
+  int Model::remove_gauge_freedom(vector< vector<float> > & cov) {
+    vector<float> sorted_matrix(q*q,0);
     vector<int> mapping(q*q);
     double smalln = min(1e-30, params->pseudocount);
     int idx_aux[q*q][2];
@@ -84,9 +84,9 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
 	  int b = idx_aux[mapping[k]][1];
 	  if (decJ[i*q+a][j*q+b] > 0) neff++;
 	  J[i*q+a][j*q+b] = 0.0;
-	  decJ[i*q+a][j*q+b] = 0.0;
+	  decJ[i*q+a][j*q+b] = 0;
 	  J[j*q+b][i*q+a] = 0.0;
-	  decJ[j*q+b][i*q+a] = 0.0;
+	  decJ[j*q+b][i*q+a] = 0;
 	}
       }
     }
@@ -94,7 +94,7 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
     return 0;
   }
    
-  int Model::initialize_parameters(vector<double> & fm) {        /* {READ J,H FROM FILE} OR {SET J,H=0 OR H=IND.SITE.MODEL} */
+  int Model::initialize_parameters(vector<float> & fm) {        /* {READ J,H FROM FILE} OR {SET J,H=0 OR H=IND.SITE.MODEL} */
     if (params->Metropolis && !params->Gibbs) {
       Gibbs=false;
     } else if (!params->Metropolis && params->Gibbs) {
@@ -192,7 +192,7 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
     return 0;
   }
   
-  void Model::initial_decimation(vector< vector<double> > & cov) {
+  void Model::initial_decimation(vector< vector<float> > & cov) {
     int n=0;
     if(!params->file_cc) {
       if(params->dgap) {
@@ -215,24 +215,24 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
 	for(int j = 0; j < L; j++) {
 	  for(int a = 0; a < q; a++) {
 	    for(int b = 0; b < q; b++) {
-	      decJ[i*q + a][j*q + b] = 1.0;
+	      decJ[i*q + a][j*q + b] = 1;
 	      if(i == j) {
-		decJ[i*q+a][j*q+b] = 0.0;
+		decJ[i*q+a][j*q+b] = 0;
 		J[i*q+a][j*q+b] = 0.0;
 	      } else if(params->dgap && (a == 0 || b == 0)) {
-		decJ[i*q + a][j*q + b] = 0.0;
+		decJ[i*q + a][j*q + b] = 0;
 		J[i*q + a][j*q + b] = 0.0;
 	      } else if(params->gapnn) {
 		if(abs(i - j) > 1 && (a == 0 || b == 0)) {
-		  decJ[i*q + a][j*q + b] = 0.0;
+		  decJ[i*q + a][j*q + b] = 0;
 		  J[i*q + a][j*q + b] = 0.0;
 		}
 		if(abs(i-j)==1 && ((a == 0 && b > 0) || (b == 0 && a > 0))) {
-		  decJ[i*q + a][j*q + b] = 0.0;
+		  decJ[i*q + a][j*q + b] = 0;
 		  J[i*q + a][j*q + b] = 0.0;
 		} 
 	      } else if(params->phmm && !(a == 0 && b == 0 && abs(i-j) == 1)) {
-		decJ[i*q + a][j*q + b] = 0.0;
+		decJ[i*q + a][j*q + b] = 0;
 		J[i*q + a][j*q + b] = 0.0;
 	      } 
 	    }
@@ -254,18 +254,18 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
 	double tmp;
 	for(i = 0; i < L*q; i++) {
 	  for(j = 0; j < L*q; j++)
-	    decJ[i][j] = 0.0;
+	    decJ[i][j] = 0;
 	}
 	while(!feof(filep) && fgets(buffer,100, filep) && 
 	      ( sscanf(buffer, "%d %d %d %d %lf \n", &i, &j, &a, &b, &tmp) == 5 || sscanf(buffer, "%d %d %d %d \n", &i, &j, &a, &b) == 4) ) {
-	  decJ[i*q+a][j*q+b] = 1.0;
-	  decJ[j*q+b][i*q+a] = 1.0;
+	  decJ[i*q+a][j*q+b] = 1;
+	  decJ[j*q+b][i*q+a] = 1;
 	  n++;
 	}
 	fclose(filep);
 	for(i = 0; i < q*L; i++) {
 	  for(j = 0; j < q*L; j++) {
-	    if(decJ[i][j] == 0.0) {
+	    if(decJ[i][j] == 0) {
 	      J[i][j] = 0.0;
 	    }
 	  }
@@ -625,7 +625,7 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
 }
 
   
-  int Model::compute_errors(vector<double> & fm, vector< vector<double> > & sm, vector< vector<double> > & cov, Errs & errs) {
+int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vector< vector<float> > & cov, Errs & errs) {
     errs.errnorm = 0;
     errs.merrh = 0;
     errs.merrJ = 0;
@@ -649,7 +649,7 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
     return 0;
   }
 
-  double Model::pearson(vector< vector<double> > & cov) {
+  double Model::pearson(vector< vector<float> > & cov) {
     double mean_cov_s = 0.0;
     double mean_cov = 0.0;
     double mean_prod = 0.0;
@@ -688,7 +688,7 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
 
   /******************** METHODS FOR LEARNING ***********************************************************/
 
-  double Model::update_parameters(vector<double> & fm, vector< vector<double> > & sm, int iter) {
+  double Model::update_parameters(vector<float> & fm, vector< vector<float> > & sm, int iter) {
     if (params->learn_strat != 5) {
       double lrav=0;
       int n=0;
@@ -860,8 +860,8 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
 	cerr << "Error: coupling " << i << " " << j << " " << a << " " << b << "was already decimated" << endl; 
       J[i*q+a][j*q+b] = 0.0;
       J[j*q+b][i*q+a] = 0.0;
-      decJ[i*q+a][j*q+b] = 0.0;
-      decJ[j*q+b][i*q+a] = 0.0;
+      decJ[i*q+a][j*q+b] = 0;
+      decJ[j*q+b][i*q+a] = 0;
     }
     index = tmp_idx[c];
     cout << "Smallest sDKL associated with the first kept coupling is " <<  sorted_struct[c] << " (i: " << idx[index][0] << " j: " << idx[index][1] << " a: " << idx[index][2] << " b: " << idx[index][3] << " )" << endl;

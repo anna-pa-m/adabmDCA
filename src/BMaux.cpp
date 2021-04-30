@@ -36,7 +36,7 @@ double min(double x, double y) {
 }
 
 
-int quicksort(vector<double> & x, vector<int> & tmp_idx, int first, int last) {
+int quicksort(vector<float> & x, vector<int> & tmp_idx, int first, int last) {
 	int i, j, pivot, index;
 	double temp;
 	if(first < last) {
@@ -325,15 +325,15 @@ int print_alphabet(char * ctype) {
 }
 
 
-int print_frobenius_norms(vector<double> & h, vector< vector<double> > & J, int L, int q, char *normfile, char *parfile) {
+int print_frobenius_norms(vector<float> & h, vector< vector<float> > & J, int L, int q, char *normfile, char *parfile) {
 
   ofstream fp;
   ofstream fpp;
   fp.open(normfile);
   fpp.open(parfile);
 
-  vector<double> hzs=h;
-  vector< vector<double> > Jzs=J;
+  vector<float> hzs=h;
+  vector< vector<float> > Jzs=J;
 
   for(int i = 0; i < L; i++) {
     double mean_h = 0.0;

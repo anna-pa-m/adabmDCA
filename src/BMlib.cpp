@@ -723,7 +723,7 @@ Data::Data(Params * _params):
     fp.close();
   }
 
-  int Data::print_statistics(char *file_sm, char *file_fm, char *file_tm, vector<double> & fm_s, vector< vector<double> > & sm_s, vector<double> & tm_s) {
+  int Data::print_statistics(char *file_sm, char *file_fm, char *file_tm, vector<float> & fm_s, vector< vector<float> > & sm_s, vector<float> & tm_s) {
     ofstream fs;
     ofstream ff;
     ofstream ft;
