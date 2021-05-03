@@ -13,6 +13,7 @@
 #include <climits>
 #include <iostream>
 #include <fstream>
+#include "BMlib.h"
 
 using namespace std;
 
@@ -316,12 +317,37 @@ int print_alphabet(char * ctype) {
     q = 1;
   } else if(!strcmp(ctype, "e")) {
     cout << "Using alphabet: -AF5TtGEZhBbeRrq \n" << endl;
-    q = 16;
+	q = 16;
   } else {
     cerr << "Use 'a' for amino-acids, 'n' for nitrogenous bases or 'i' for Ising-like variables" << endl;
     return EXIT_FAILURE;
   }
   return q;
+}
+
+vector<char> alphabet(char * ctype) {
+  if(ctype == NULL) {
+    fprintf(stdout, "Error in alphabet pointer\n");
+    exit(EXIT_FAILURE);
+  }  
+  vector<char> ris;
+  if(!strcmp(ctype, "a")) {
+    char app[] = "-ACDEFGHIKLMNPQRSTVWY\n";
+    ris= vector<char>(app, app + sizeof(app) / sizeof(char) );
+  } else if(!strcmp(ctype, "n")) {
+    char app[] = "-AUCG";
+    ris= vector<char>(app, app + sizeof(app) / sizeof(char) );
+  } else if(!strcmp(ctype, "i")) {
+    char app[] = "01";
+    ris= vector<char>(app, app + sizeof(app) / sizeof(char) );
+  } else if(!strcmp(ctype, "e")) {
+    char app[] = "-AF5TtGEZhBbeRrq";
+    ris= vector<char>(app, app + sizeof(app) / sizeof(char) );
+  } else {
+    fprintf(stderr, "Use 'a' for amino-acids or 'n' for nitrogenous bases\n");
+    exit(EXIT_FAILURE);
+  }
+  return ris;
 }
 
 

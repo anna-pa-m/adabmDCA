@@ -28,19 +28,29 @@ struct Errs {
   double merrJ;
 };
 
-class Model {
-  public:
-  int q, L;
-  vector< vector<int> > curr_state;
-  vector<float> h, Gh;
-  vector< vector<float> > J, GJ;
-  vector< vector<unsigned char > > decJ;
+struct Stats {
+
   vector<float> fm_s;
   vector< vector<float> > sm_s;
   vector<float> tm_s;
+  valarray<int> qs;
+  valarray<float> corr;
+  vector< vector < vector <int> > > synth_msa;
+  vector< vector < vector <int> > > curr_state;
+  omp_lock_t lock;
+
+};
+
+class Model {
+  public:
+  int q, L;
+  vector<float> h, Gh;
+  vector< vector<float> > J, GJ;
+  vector< vector<unsigned char > > decJ;
   vector< vector<int> > * tm_index;
   bool Gibbs;
   Params * params;
+  Stats * mstat;
   double alpha, acc;  // for FIRE
   int counter;   // for FIRE
   double model_sp;
@@ -48,8 +58,11 @@ class Model {
   vector<int> tmp_idx;
   vector<float> sorted_struct;
 
-  Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int _ntm, vector< vector<int> > * _tm_index);
+  Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<int> > & msa, int _ntm, vector< vector<int> > * _tm_index);
 
+
+  void update_synth_msa(vector<int> & x1, vector<int> & x2);
+  void init_model_stat(int ntm);
   void init_current_state(vector< vector<int> > & msa);
   int remove_gauge_freedom(vector< vector<float> > & cov);
   int initialize_parameters(vector<float> & fm);
@@ -61,10 +74,13 @@ class Model {
   void metropolis_step(vector<int> & x);
   void gibbs_step(vector<int> & x);
   void MC_sweep(vector<int> & x);
-  valarray<int> mc_chain(vector<int> & x1, vector<int> & x2, valarray<double> & corr);
+  void mc_chain(vector<int> & x1, vector<int> & x2);
+  void update_overlap(valarray<int> & qs);
+  void update_corr(int i, int value);
   bool sample(vector< vector<int> > & msa);
   void init_statistics();
-  void update_statistics(vector<int> & x, FILE * fp, FILE * fe);
+  void update_statistics();
+  void update_statistics_lock(vector<int> & x, FILE * fp, FILE * fe);
   void update_tm_statistics(vector<int> & x);
   void compute_third_order_correlations();
   int compute_errors(vector<float> & fm, vector< vector<float> > & sm, vector< vector<float> > & cov, Errs & errs);

@@ -16,6 +16,7 @@ using namespace std;
 
 
 Params::Params() {
+	
     file_msa = 0;
     file_w = 0;
     file_freq = 0;
@@ -43,6 +44,7 @@ Params::Params() {
     dec_f = false;
     dec_J = false;
     sparsity = 0;
+	num_threads = 1;
     rho = 0.9; // RMSprop reinforcement (learn_strat = 2)
     w_th = 0.2;
     regJ1 = 0.0;
@@ -68,8 +70,11 @@ Params::Params() {
 
   int Params::read_params (int & argc, char ** argv) {
     int c;
-    while ((c = getopt(argc, argv, "a:b:c:d:e:f:g:hi:j:k:l:m:n:o:p:q:r:s:t:u:v:w:x:y:z:ABC:DE:FGHIJ:KLMNPQRS:T:UVWX:")) != -1) {
+    while ((c = getopt(argc, argv, "a:b:c:d:e:f:g:hi:j:k:l:m:n:o:p:q:r:s:t:u:v:w:x:y:z:ABC:DE:FGHIJ:KLMNO:PQRS:T:UVWX:")) != -1) {
 		switch (c) {
+			case 'O':
+				num_threads = atoi(optarg);
+				break;
 			case 'b':
 				ctype = optarg;
 				break;
@@ -227,6 +232,7 @@ Params::Params() {
 				cout << "-i : (number) Maximum number of iterations, default: " << maxiter << endl;
 				cout << "-l : (number) Threshold used within the reweighting process, default: " << w_th << endl;
 				cout << "-d : (number) Pseudo-count, default: 1/Meff" << endl;
+				cout << "-O : (number) Number of threads" << endl;
 				cout << "### Additional I/O files ###" << endl;
 				cout << "-q : (file) Read frequencies from file - no MSA" << endl;
 				cout << "-w : (file) weights file" << endl;
@@ -238,9 +244,9 @@ Params::Params() {
 				cout << "-m : (number) Print temporary Frobenius norms and parameters every x iterations, default: " << nprintfile << endl;
 				cout << "-F : (flag) Do not overwrite temporary output" << endl;
 				cout << "### Settings of the learning ###" << endl;
-			        cout << "-e : (number) Initial MC equilibration time (in MCsweeps), default: " << Teq << endl;
+			    cout << "-e : (number) Initial MC equilibration time (in MCsweeps), default: " << Teq << endl;
 				cout << "-t : (number) Initial sampling time of MC algorithm (in MCsweeps), default: " << Twait << endl;
-				cout << "-s : (number) Number of the MC chains, default: " << Nmc_starts << endl;
+				cout << "-s : (number) Number of the MC chains per thread, default: " << Nmc_starts << endl;
 				cout << "-n : (number) Number of MC sampled configurations per chain, default: " << Nmc_config << endl;
 				cout << "-g : (number) L1 Regularization (J parameters), default: " << regJ1 << endl;
 				cout << "-r : (number) L2 Regularization (J parameters), default: " << regJ2 << endl;
@@ -295,7 +301,8 @@ Params::Params() {
     } else {
       cout << "Fixed sampling time: " << Twait << " fixed equilibration time: " << Teq << endl;
     }
-    cout << "Using " << Nmc_starts << " seeds and tot. number of points " << Nmc_starts * Nmc_config << endl;
+	cout << "Using " << num_threads << " threads" << endl;
+    cout << "Using " << Nmc_starts << " seeds for each thread and tot. number of points " << Nmc_starts * Nmc_config * num_threads << endl;
     if (initdata) {
       cout << "MC chains are initialized using MSA sequences";
     } else {
@@ -519,6 +526,8 @@ Data::Data(Params * _params):
     sm.resize(L*q,fm);
     cov.clear();
     cov.resize(L*q,fm);
+	//synth_msa.clear();
+	//synth_msa.resize(params->num_threads, msa);
   }
 
   void Data::compute_empirical_statistics() {

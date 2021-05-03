@@ -11,6 +11,7 @@
 #include <string.h>
 #include <getopt.h>
 #include <stdbool.h>
+#include <omp.h>
 #include <iostream>
 #include <iomanip>
 #include "BMaux.h"
@@ -29,9 +30,11 @@ int main(int argc, char ** argv) {
   Params params;
   params.read_params(argc,argv);
   srand(params.seed ? params.seed : time(NULL));
+  omp_set_num_threads(params.num_threads);
   Data data(&params);
+  Stats mstat;
   params.print_learning_strategy();
-  Model model(data.q,data.L,&params,data.msa,data.tm.size(),&data.tm_index);
+  Model model(data.q,data.L,&params,&mstat,data.msa,data.tm.size(),&data.tm_index);
   model.initialize_parameters(data.fm);
   model.initial_decimation(data.cov);
   /* END INITIALIZATION */
@@ -44,7 +47,7 @@ int main(int argc, char ** argv) {
   char sec[1000];
   char third[1000];
   int iter = 0;
-  long in_time = time(NULL);
+  int in_time = omp_get_wtime();
   bool conv = (params.maxiter > 0) ?  false : true;
   Errs errs;
   double lrav=params.lrateJ;
@@ -58,7 +61,7 @@ int main(int argc, char ** argv) {
     model.compute_errors(data.fm,data.sm,data.cov,errs);
     if(iter % params.nprint == 0) {
       cout << setprecision(1);
-      cout << "it: " << iter << " el_time: " << time(NULL)-in_time << " N: " << params.Nmc_config * params.Nmc_starts << " Teq: " << params.Teq << " Twait: " << params.Twait;
+      cout << "it: " << iter << " el_time: " << omp_get_wtime() -in_time << " N: " << params.Nmc_config * params.Nmc_starts * params.num_threads << " Teq: " << params.Teq << " Twait: " << params.Twait;
       cout.setf(ios::scientific);
       cout << " merr_fm: " << errs.merrh << " merr_sm: " << errs.merrJ << " averr_fm: " << errs.averrh << " averr_sm: " << errs.averrJ << " cov_err: " << errs.errnorm;
       cout.unsetf(ios::scientific);
@@ -72,7 +75,7 @@ int main(int argc, char ** argv) {
       model.print_model(par);
       if(data.tm.size()>0)
 	model.compute_third_order_correlations();
-      data.print_statistics(sec, first, third, model.fm_s, model.sm_s, model.tm_s);
+      data.print_statistics(sec, first, third, model.mstat->fm_s, model.mstat->sm_s, model.mstat->tm_s);
     }
     lrav=model.update_parameters(data.fm,data.sm,iter);
     if(iter > 0 && params.compwise && (errs.errnorm<params.conv || iter % params.dec_steps == 0)) {
@@ -82,7 +85,7 @@ int main(int argc, char ** argv) {
       model.print_model(par);
       if(data.tm.size()>0)
 	model.compute_third_order_correlations();
-      data.print_statistics(sec, first, third, model.fm_s, model.sm_s, model.tm_s);
+      data.print_statistics(sec, first, third, model.mstat->fm_s, model.mstat->sm_s, model.mstat->tm_s);
       // Then decimate
       int aux = ceil( model.n_links() / 100);
       model.decimate_compwise(aux,iter);
@@ -111,7 +114,7 @@ int main(int argc, char ** argv) {
     while(!eqmc) {
       eqmc = model.sample(data.msa);
       model.compute_errors(data.fm,data.sm,data.cov,errs);
-      cout << "N: " << params.Nmc_config * params.Nmc_starts << " Teq: " << params.Teq <<  " Twait: " << params.Twait;
+      cout << "N: " << params.Nmc_config * params.Nmc_starts * params.num_threads << " Teq: " << params.Teq <<  " Twait: " << params.Twait;
       cout.setf(ios::scientific);
       cout << " merr_fm: " << errs.merrh << " merr_sm: " << errs.merrJ << " averr_fm: " << errs.averrh << " averr_sm: " << errs.averrJ << " cov_err: " << errs.errnorm ;
       cout.unsetf(ios::scientific);
@@ -127,7 +130,7 @@ int main(int argc, char ** argv) {
   model.print_model(par);
   if(data.tm.size()>0)
     model.compute_third_order_correlations();
-  data.print_statistics(sec, first, third, model.fm_s, model.sm_s, model.tm_s);
+  data.print_statistics(sec, first, third, model.mstat->fm_s, model.mstat->sm_s, model.mstat->tm_s);
   cout << "****** Execution completed ******" << endl;
 
   fflush(stdout);

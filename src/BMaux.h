@@ -30,7 +30,8 @@ int convert_char_amino(char a);
 int convert_char_nbase(char a);
 int convert_char_epi(char a);
 int convert_char_ising(char a);
-int print_alphabet(char * ctype); 
+int print_alphabet(char * ctype);
+vector <char> alphabet(char * ctype);
 int print_frobenius_norms(vector<float> & h, vector< vector<float> > & J, int L, int q, char *normfile, char *parfile); 
 
 #endif

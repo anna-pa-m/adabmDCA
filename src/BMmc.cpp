@@ -9,6 +9,7 @@
 #include <string.h>
 #include <getopt.h>
 #include <stdbool.h>
+#include <omp.h>
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -20,8 +21,11 @@ using namespace std;
 
 
 
-Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int _ntm, vector< vector<int> > * _tm_index):
-  q(_q),L(_L),h(L*q,0),J(L*q,h),decJ(L*q,vector<unsigned char>(L*q,0)),fm_s(L*q,0),sm_s(L*q,fm_s),tm_s(_ntm,0),tm_index(_tm_index),Gibbs(false),params(_params),alpha(0.1),acc(1),counter(0),model_sp(0) {
+Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<int> > & msa, int _ntm, vector< vector<int> > * _tm_index):
+  q(_q),L(_L),h(L*q,0),J(L*q,h),decJ(L*q,vector<unsigned char>(L*q,0)),tm_index(_tm_index),
+  Gibbs(false),params(_params),mstat(_mstat),alpha(0.1),acc(1),counter(0),model_sp(0) {
+
+    init_model_stat(_ntm);
     init_current_state(msa);
     if (params->learn_strat == 1 || params->learn_strat == 2 || params->learn_strat == 5) {
       Gh.clear();
@@ -33,29 +37,49 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
   }
 
   /******************** METHODS FOR INIT AND OUTPUT ***********************************************************/
+  void Model::init_model_stat(int _ntm) {
+
+    mstat->fm_s.clear();
+    mstat->fm_s.resize(L*q,0);
+    mstat->sm_s.clear();
+    mstat->sm_s.resize(L*q, mstat->fm_s);
+    mstat->tm_s.clear();
+    mstat->tm_s.resize(_ntm, 0);
+    mstat->qs.resize(6);
+    mstat->corr.resize((params->Nmc_config-1)*params->Twait);
+    mstat->synth_msa.clear();
+    mstat->synth_msa.resize(params->num_threads);
+    mstat->curr_state.clear();
+    mstat->curr_state.resize(params->num_threads);
+    omp_init_lock(&mstat->lock);
+
+  }
 
   void Model::init_current_state(vector< vector<int> > & msa) {
-    curr_state.clear();
-    if (!params->initdata) {
-      vector<int> tmp(L);
-      for(int s = 0; s < params->Nmc_starts; s++) {
-	for(int i = 0; i < L; i++) {
-	  if(!strcmp(params->ctype, "i"))
-	    tmp[i] = (rand01() > 0.5) ? 1 : 0;
-	  else
-	    tmp[i] = (int)rand() % q;
-	}
-	curr_state.push_back(tmp);
-      }
-    } else {
-      if (int(msa.size()) == 0) {
-	cerr << "Empty MSA!" << endl;
-	exit(EXIT_FAILURE);
+    
+    for(int t = 0; t < params->num_threads; t++) {
+      mstat->curr_state[t].clear();
+      if (!params->initdata) {
+        vector<int> tmp(L);
+        for(int s = 0; s < params->Nmc_starts; s++) {
+	        for(int i = 0; i < L; i++) {
+	          if(!strcmp(params->ctype, "i"))
+	            tmp[i] = (rand01() > 0.5) ? 1 : 0;
+	          else
+	            tmp[i] = (int)rand() % q;
+	        }
+	        mstat->curr_state[t].push_back(tmp);
+        }
       } else {
-	for(int s = 0; s < params->Nmc_starts; s++) {
-	  int i = (int)rand() % int(msa.size());
-	  curr_state.push_back(msa[i]);
-	}
+        if (int(msa.size()) == 0) {
+	        cerr << "Empty MSA!" << endl;
+	        exit(EXIT_FAILURE);
+        } else {
+	        for(int s = 0; s < params->Nmc_starts; s++) {
+	          int i = (int)rand() % int(msa.size());
+	            mstat->curr_state[t].push_back(msa[i]);
+	        }
+        }
       }
     }
   }
@@ -423,24 +447,22 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
     }
   }
 
-  valarray<int> Model::mc_chain(vector<int> & x1, vector<int> & x2, valarray<double> & corr) {
-    FILE * fp = 0, * fe = 0;
-    if(params->file_samples)
-      fp = fopen(params->file_samples, "a");
-    if(params->file_en)
-      fe = fopen(params->file_en, "a");
+  void Model::mc_chain(vector<int> & x1, vector<int> & x2) {
+    //cout << omp_get_thread_num() << endl;
+    //cout << params << " " << omp_get_thread_num() << endl;
     for(int t=0; t < params->Teq; t++) {
       MC_sweep(x1);
       MC_sweep(x2);
     }
     valarray<int> qs(6);
     vector<int> old_state1, old_state2, oldold_state1, oldold_state2;
-    update_statistics(x1,fp,fe);
-    update_statistics(x2,fp,fe);
-    if(int(tm_s.size())>0) {
-      update_tm_statistics(x1);
-      update_tm_statistics(x2);
-    }
+    //update_statistics_lock(x1,fp,fe);
+    //update_statistics_lock(x2,fp,fe);
+    update_synth_msa(x1, x2);
+    //if(int(mstat->tm_s.size())>0) {
+    //  update_tm_statistics(x1);
+    //  update_tm_statistics(x2);
+    //}
     double o12=overlap(x1,x2);
     qs[0]+=o12;
     qs[1]+=(o12*o12);
@@ -451,16 +473,17 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
       old_state1=x1;
       old_state2=x2;
       for(int t=0; t < params->Twait; t++) {
-	corr[n*params->Twait+t]+=(overlap(x1,x1i)+overlap(x2,x2i));
-	MC_sweep(x1);
-	MC_sweep(x2);
+        update_corr(n*params->Twait+t,(overlap(x1,x1i)+overlap(x2,x2i)));
+	      MC_sweep(x1);
+	      MC_sweep(x2);
       }
-      update_statistics(x1,fp,fe);
-      update_statistics(x2,fp,fe);
-      if(int(tm_s.size())>0) {
-	update_tm_statistics(x1);
-	update_tm_statistics(x2);
-      }
+      //update_statistics_lock(x1,fp,fe);
+      //update_statistics_lock(x2,fp,fe);
+      update_synth_msa(x1, x2);
+      //if(int(mstat->tm_s.size())>0) {
+	    //  update_tm_statistics(x1);
+	    //  update_tm_statistics(x2);
+      //}
       o12=overlap(x1,x2);
       qs[0]+=o12;
       qs[1]+=(o12*o12);
@@ -469,57 +492,87 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
       qs[2]+=(o1+o2);
       qs[3]+=(o1*o1+o2*o2);
       if (n>0) {
-	double oo1=overlap(oldold_state1,x1);
-	double oo2=overlap(oldold_state2,x2);
-	qs[4]+=(oo1+oo2);
-	qs[5]+=(oo1*oo1+oo2*oo2);
+	      double oo1=overlap(oldold_state1,x1);
+	      double oo2=overlap(oldold_state2,x2);
+	      qs[4]+=(oo1+oo2);
+	      qs[5]+=(oo1*oo1+oo2*oo2);
       }
     }
-    if(params->file_samples)
-      fclose(fp);
-    if(params->file_en)
-      fclose(fe);
-    return qs; 
+    update_overlap(qs); 
   }
 
+
+  void Model::update_synth_msa(vector<int> & x1, vector<int> & x2) {
+
+    mstat->synth_msa[omp_get_thread_num()].push_back(x1);
+    mstat->synth_msa[omp_get_thread_num()].push_back(x2);
+  }
+
+  void Model::update_corr(int i, int value) {
+
+    omp_set_lock(&mstat->lock);
+	  mstat->corr[i]+=value;
+    omp_unset_lock(&mstat->lock);
+  }
+
+  void Model::update_overlap(valarray<int> & qs) {
+
+    omp_set_lock(&mstat->lock);
+    for(int i = 0; i <6; i++)
+      mstat->qs[i] += qs[i];
+    omp_unset_lock(&mstat->lock);
+
+  }
+
+
   bool Model::sample(vector< vector<int> > & msa) {
+    
     bool eqmc = true;
     init_statistics();
-    valarray<int> qs(6);
-    valarray<double> corr(0.,(params->Nmc_config-1)*params->Twait);
-    if (!params->persistent) {init_current_state(msa);}
-    for(int s = 0; s < params->Nmc_starts/2; s++) {
-      qs+=mc_chain(curr_state[2*s],curr_state[2*s+1],corr);
-    } 
-    corr/=params->Nmc_starts;
+    for(int i =0; i <int(mstat->corr.size()); i++)
+      mstat->corr[i] = 0.0;
+    for(int i =0; i<int(mstat->qs.size());i++)
+      mstat->qs[i] = 0;
+    if (!params->persistent) 
+      init_current_state(msa);
+    int s; 
+#pragma omp parallel for private(s) 
+    for(int t = 0; t < params->num_threads; t++) {
+      for(s = 0; s < params->Nmc_starts/2; s++) { 
+        mc_chain(mstat->curr_state[t][2*s],mstat->curr_state[t][2*s+1]);
+      }
+    }
+    update_statistics();
+    mstat->corr/=params->Nmc_starts;
     char filename_aux[1000];
     sprintf(filename_aux, "corr_%s.dat", params->label);
     ofstream fileout;
     double nse=params->Nmc_config*(params->Nmc_starts/2);
-    double qext=qs[0]/nse;
-    double dqext=sqrt(qs[1]/(nse-1)-qs[0]*qs[0]/nse/(nse-1))/sqrt(nse);
+    double qext=mstat->qs[0]/nse;
+    double dqext=sqrt(mstat->qs[1]/(nse-1)-mstat->qs[0]*mstat->qs[0]/nse/(nse-1))/sqrt(nse);
     double nsi1=(params->Nmc_config-1)*params->Nmc_starts;
-    double qin1=nsi1>0 ? qs[2]/nsi1 : 0;
-    double dqin1=nsi1>1 ? sqrt(qs[3]/(nsi1-1)-qs[2]*qs[2]/nsi1/(nsi1-1))/sqrt(nsi1) : 0;
+    double qin1=nsi1>0 ? mstat->qs[2]/nsi1 : 0;
+    double dqin1=nsi1>1 ? sqrt(mstat->qs[3]/(nsi1-1)-mstat->qs[2]*mstat->qs[2]/nsi1/(nsi1-1))/sqrt(nsi1) : 0;
     double nsi2=(params->Nmc_config-2)*params->Nmc_starts;
-    double qin2=nsi2>0 ? qs[4]/nsi2 : 0;
-    double dqin2=nsi2>1 ? sqrt(qs[5]/(nsi2-1)-qs[4]*qs[4]/nsi2/(nsi2-1))/sqrt(nsi2) : 0;
+    double qin2=nsi2>0 ? mstat->qs[4]/nsi2 : 0;
+    double dqin2=nsi2>1 ? sqrt(mstat->qs[5]/(nsi2-1)-mstat->qs[4]*mstat->qs[4]/nsi2/(nsi2-1))/sqrt(nsi2) : 0;
     int test1=(abs(qext-qin1)<3*sqrt(dqext*dqext+dqin1*dqin1) ? 1 : 0);
     int test2=(abs(qext-qin2)<3*sqrt(dqext*dqext+dqin2*dqin2) ? 1 : 0);
     if (params->adapt) {
       if (test1) {
-	if (params->Twait > 1) params->Twait-=1;
-	params->Teq = 2*params->Twait;
+	      if (params->Twait > 1) 
+          params->Twait-=1;
+	      params->Teq = 2*params->Twait;
       } else if (!test2) {
-	eqmc = false;
-	params->Twait+=1;
-	params->Teq = 2*params->Twait;
+	      eqmc = false;
+	      params->Twait+=1;
+	      params->Teq = 2*params->Twait;
       }
     }
 
     fileout.open(filename_aux);
-    for (int i=0;i<int(corr.size());i++) 
-      fileout <<  i << " " << corr[i] << endl;
+    for (int i=0;i<int(mstat->corr.size());i++) 
+      fileout <<  i << " " << mstat->corr[i] << endl;
     fileout.close();
     if(params->nprinteq)
       cout<<"Sampling info: q_ext: "<<qext<<" +- "<<dqext<<" q_int_1: "<<qin1<<" +- "<<dqin1<<" q_int_2: "<<qin2<<" +- "<<dqin2<<" Test_eq1: "<<test1<<" Test_eq2: "<<test2<<endl;
@@ -531,13 +584,15 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
 
   void Model::init_statistics() {
     for(int i = 0; i < L*q; i++) {
-      fm_s[i] = 0;
+      mstat->fm_s[i] = 0;
       for(int j = 0; j < L*q; j++) {
-	sm_s[i][j] = 0;
+	      mstat->sm_s[i][j] = 0;
       }
     }
-    for(int ind = 0; ind < int(tm_s.size()); ind++) 
-      tm_s[ind] = 0;  
+    for(int ind = 0; ind < int(mstat->tm_s.size()); ind++) 
+      mstat->tm_s[ind] = 0;
+    for(int i = 0; i < params->num_threads;i++) 
+      mstat->synth_msa[i].clear();
     FILE * fp;
     if(params->file_samples) {
       fp  = fopen(params->file_samples, "w");
@@ -549,77 +604,156 @@ Model::Model(int _q, int _L, Params * _params, vector< vector<int> > & msa, int 
     }    
   }
   
-  void Model::update_statistics(vector<int> & x, FILE * fp, FILE * fe) {
+  void Model::update_statistics() {
+
+    int i, j, k, a, b, c;
+    int Ns = params->Nmc_starts * params->Nmc_config * params->num_threads;
+    FILE * fp = 0;
+    vector <int> x;
+
+    vector <char> abc = alphabet(params->ctype);
+    if(params->file_samples)
+      fp = fopen(params->file_samples, "w");
+    //if(params->file_en)
+    //  fe = fopen(params->file_en, "w");
+    for(int t = 0; t<params->num_threads; t++) {
+      for(int m = 0; m< int(mstat->synth_msa[t].size());m++) {
+        x = mstat->synth_msa[t][m];
+        if(params->file_samples) {
+          fprintf(fp, ">THREAD%d_CHAIN%d_SAMPLE%d h_en %lf J_en %lf \n", t,
+            m/params->Nmc_config, m%params->Nmc_config, prof_energy(x), DCA_energy(x));
+          for(int i = 0; i<L;i++) {
+            if(!strcmp(params->ctype, "i"))
+              fprintf(fp, "%d", x[i]);
+            else
+              fprintf(fp, "%c", abc[x[i]]);
+          }
+          fprintf(fp, "\n");
+        }
+        if(!strcmp(params->ctype, "i")) {
+          for(int i = 0; i<L; i++) {
+	          mstat->fm_s[i] += 1.0/Ns * (2.0*x[i]-1.0);
+	          mstat->sm_s[i][i] += 1.0/Ns;
+	          for(int j = i+1; j<L;j++) {
+	            mstat->sm_s[i][j] += 1.0/Ns * (2.0*x[i]-1.0) * (2.0*x[j]-1.0);
+	            mstat->sm_s[j][i] += 1.0/Ns * (2.0*x[j]-1.0) * (2.0*x[i]-1.0);
+	          }
+          }
+        } else {
+          for(int i = 0; i < L; i++) {
+	          mstat->fm_s[i*q + x[i]] += 1.0/Ns;
+	          mstat->sm_s[i*q + x[i]][i*q + x[i]] += 1.0/Ns;
+	          for(int j = i+1; j < L; j++) {
+	            mstat->sm_s[i*q + x[i]][j*q + x[j]] += 1.0/Ns;
+	            mstat->sm_s[j*q + x[j]][i*q + x[i]] += 1.0/Ns;
+	          }
+          }
+        }
+        for(int ind = 0; ind < int((*tm_index).size()); ind ++) {
+          if(!strcmp(params->ctype, "i")) {
+	          i = (*tm_index)[ind][0];
+	          j = (*tm_index)[ind][1];
+	          k = (*tm_index)[ind][2];
+	        mstat->tm_s[ind] += 1.0/Ns * (2.0*x[i]-1.0) * (2.0*x[j]-1.0) * (2.0*x[k]-1.0);
+          } else {
+	          i = (*tm_index)[ind][0];
+	          j = (*tm_index)[ind][1];
+	          k = (*tm_index)[ind][2];
+	          a = (*tm_index)[ind][3];
+	          b = (*tm_index)[ind][4];
+	          c = (*tm_index)[ind][5];
+	          if(x[i] == a && x[j] == b && x[k] == c) 
+	            mstat->tm_s[ind] += 1.0/Ns;
+          }
+        }
+      }
+    }
+
+    if(params->file_samples)
+      fclose(fp);
+    //if(params->file_en)
+    //  fclose(fe);
+  }
+
+  void Model::update_statistics_lock(vector<int> & x, FILE * fp, FILE * fe) {
     int Ns = params->Nmc_starts * params->Nmc_config;
+    omp_set_lock(&mstat->lock);
     if(!strcmp(params->ctype, "i")) {
       for(int i = 0; i<L; i++) {
-	fm_s[i] += 1.0/Ns * (2.0*x[i]-1.0);
-	sm_s[i][i] += 1.0/Ns;
-	for(int j = i+1; j<L;j++) {
-	  sm_s[i][j] += 1.0/Ns * (2.0*x[i]-1.0) * (2.0*x[j]-1.0);
-	  sm_s[j][i] += 1.0/Ns * (2.0*x[j]-1.0) * (2.0*x[i]-1.0);
-	}
+	      mstat->fm_s[i] += 1.0/Ns * (2.0*x[i]-1.0);
+	      mstat->sm_s[i][i] += 1.0/Ns;
+	      for(int j = i+1; j<L;j++) {
+	        mstat->sm_s[i][j] += 1.0/Ns * (2.0*x[i]-1.0) * (2.0*x[j]-1.0);
+	        mstat->sm_s[j][i] += 1.0/Ns * (2.0*x[j]-1.0) * (2.0*x[i]-1.0);
+	      }
       }
     } else {
       for(int i = 0; i < L; i++) {
-	fm_s[i*q + x[i]] += 1.0/Ns;
-	sm_s[i*q + x[i]][i*q + x[i]] += 1.0/Ns;
-	for(int j = i+1; j < L; j++) {
-	  sm_s[i*q + x[i]][j*q + x[j]] += 1.0/Ns;
-	  sm_s[j*q + x[j]][i*q + x[i]] += 1.0/Ns;
-	}
+	      mstat->fm_s[i*q + x[i]] += 1.0/Ns;
+	      mstat->sm_s[i*q + x[i]][i*q + x[i]] += 1.0/Ns;
+	      for(int j = i+1; j < L; j++) {
+	        mstat->sm_s[i*q + x[i]][j*q + x[j]] += 1.0/Ns;
+	        mstat->sm_s[j*q + x[j]][i*q + x[i]] += 1.0/Ns;
+	      }
       }
     }
     if(params->file_samples) {
       for(int i = 0; i < L; i++)
-	fprintf(fp, "%d ", x[i]);
+	      fprintf(fp, "%d ", x[i]);
       fprintf(fp, "\n");
     }
     if(params->file_en) {
       fprintf(fe, "%lf\n", prof_energy(x) + DCA_energy(x));
     }
+    omp_unset_lock(&mstat->lock);
   }
 
   void Model::update_tm_statistics(vector<int> & x) {
     int i, j, k, a, b, c;
     int Ns = params->Nmc_starts * params->Nmc_config;
+    omp_set_lock(&mstat->lock);
     for(int ind = 0; ind < int((*tm_index).size()); ind ++) {
       if(!strcmp(params->ctype, "i")) {
-	i = (*tm_index)[ind][0];
-	j = (*tm_index)[ind][1];
-	k = (*tm_index)[ind][2];
-	tm_s[ind] += 1.0/Ns * (2.0*x[i]-1.0) * (2.0*x[j]-1.0) * (2.0*x[k]-1.0);
+	      i = (*tm_index)[ind][0];
+	      j = (*tm_index)[ind][1];
+	      k = (*tm_index)[ind][2];
+	      mstat->tm_s[ind] += 1.0/Ns * (2.0*x[i]-1.0) * (2.0*x[j]-1.0) * (2.0*x[k]-1.0);
       } else {
-	i = (*tm_index)[ind][0];
-	j = (*tm_index)[ind][1];
-	k = (*tm_index)[ind][2];
-	a = (*tm_index)[ind][3];
-	b = (*tm_index)[ind][4];
-	c = (*tm_index)[ind][5];
-	if(x[i] == a && x[j] == b && x[k] == c) 
-	  tm_s[ind] += 1.0/Ns;
+	        i = (*tm_index)[ind][0];
+	        j = (*tm_index)[ind][1];
+	        k = (*tm_index)[ind][2];
+	        a = (*tm_index)[ind][3];
+	        b = (*tm_index)[ind][4];
+	        c = (*tm_index)[ind][5];
+	        if(x[i] == a && x[j] == b && x[k] == c) 
+	          mstat->tm_s[ind] += 1.0/Ns;
       }
     }
+    omp_unset_lock(&mstat->lock);
   }
 
  void Model::compute_third_order_correlations() {
     int ind, i, j, k, a, b, c;
     if(!strcmp(params->ctype, "i")) {
       for(ind = 0; ind < int((*tm_index).size()); ind++) {
-	i = (*tm_index)[ind][0];
-	j = (*tm_index)[ind][1];
-	k = (*tm_index)[ind][2];
-	tm_s[ind] = tm_s[ind] - sm_s[i][j]*fm_s[k] - sm_s[i][k]*fm_s[j] - sm_s[j][k]*fm_s[i] + 2*fm_s[i]*fm_s[j]*fm_s[k];
+      	i = (*tm_index)[ind][0];
+	      j = (*tm_index)[ind][1];
+	      k = (*tm_index)[ind][2];
+	      mstat->tm_s[ind] = mstat->tm_s[ind] - mstat->sm_s[i][j]*mstat->fm_s[k] -
+                           mstat->sm_s[i][k]*mstat->fm_s[j] - mstat->sm_s[j][k]*mstat->fm_s[i] +
+                           2*mstat->fm_s[i]*mstat->fm_s[j]*mstat->fm_s[k];
       }
     } else {
       for(ind = 0; ind < int((*tm_index).size()); ind++) {
-	i = (*tm_index)[ind][0];
-	j = (*tm_index)[ind][1];
-	k = (*tm_index)[ind][2];
-	a = (*tm_index)[ind][3];
-	b = (*tm_index)[ind][4];
-	c = (*tm_index)[ind][5];
-	tm_s[ind] = tm_s[ind] - sm_s[i*q+a][j*q+b]*fm_s[k*q+c] - sm_s[i*q+a][k*q+c]*fm_s[j*q+b] - sm_s[j*q+b][k*q+c]*fm_s[i*q+a] + 2*fm_s[i*q+a]*fm_s[j*q+b]*fm_s[k*q+c]; 
+	      i = (*tm_index)[ind][0];
+	      j = (*tm_index)[ind][1];
+	      k = (*tm_index)[ind][2];
+	      a = (*tm_index)[ind][3];
+	      b = (*tm_index)[ind][4];
+	      c = (*tm_index)[ind][5];
+	      mstat->tm_s[ind] = mstat->tm_s[ind] - mstat->sm_s[i*q+a][j*q+b]*mstat->fm_s[k*q+c] - 
+                           mstat->sm_s[i*q+a][k*q+c]*mstat->fm_s[j*q+b] - mstat->sm_s[j*q+b][k*q+c]*mstat->fm_s[i*q+a] +
+                           2*mstat->fm_s[i*q+a]*mstat->fm_s[j*q+b]*mstat->fm_s[k*q+c]; 
     }
   }
 }
@@ -633,15 +767,15 @@ int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vect
     errs.averrJ = 0;
     for(int i = 0; i < L; i++) {
       for(int a = 0; a < q; a++) {
-	errs.averrh += fabs(fm_s[i*q+a] - fm[i*q+a]);
-	errs.merrh =  max(errs.merrh, fabs(fm_s[i*q+a] - fm[i*q+a]));	
-	for(int j = i+1; j < L; j++) {
-	  for(int b = 0; b < q; b++) {
-	    errs.errnorm = max(errs.errnorm, decJ[i*q+a][j*q+b] * fabs(cov[i*q+a][j*q+b] - sm_s[i*q+a][j*q+b] + fm_s[i*q+a]*fm_s[j*q+b]));
-	    errs.averrJ += fabs(sm_s[i*q+a][j*q+b] - sm[i*q+a][j*q+b]);
-	    errs.merrJ =  max(errs.merrJ, fabs(sm_s[i*q+a][j*q+b] - sm[i*q+a][j*q+b]));
-	  }
-	}
+	      errs.averrh += fabs(mstat->fm_s[i*q+a] - fm[i*q+a]);
+	      errs.merrh =  max(errs.merrh, fabs(mstat->fm_s[i*q+a] - fm[i*q+a]));	
+	      for(int j = i+1; j < L; j++) {
+	        for(int b = 0; b < q; b++) {
+	          errs.errnorm = max(errs.errnorm, decJ[i*q+a][j*q+b] * fabs(cov[i*q+a][j*q+b] - mstat->sm_s[i*q+a][j*q+b] + mstat->fm_s[i*q+a]*mstat->fm_s[j*q+b]));
+	          errs.averrJ += fabs(mstat->sm_s[i*q+a][j*q+b] - sm[i*q+a][j*q+b]);
+	          errs.merrJ =  max(errs.merrJ, fabs(mstat->sm_s[i*q+a][j*q+b] - sm[i*q+a][j*q+b]));
+	        }
+	      }
       }
     }
     errs.averrh /= L*q;
@@ -662,7 +796,7 @@ int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vect
 	  for(int b = 0; b < q; b++) {
 	    if(decJ[i*q + a][j*q +b]) {
 	      n += 1;
-	      double cov_s = sm_s[i*q+a][j*q+b] - fm_s[i*q+a]*fm_s[j*q+b];
+	      double cov_s = mstat->sm_s[i*q+a][j*q+b] - mstat->fm_s[i*q+a]*mstat->fm_s[j*q+b];
 	      mean_cov_s += cov_s;
 	      mean_cov += cov[i*q+a][j*q+b];
 	      mean_prod += cov[i*q+a][j*q+b] * cov_s;
@@ -694,7 +828,7 @@ int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vect
       int n=0;
       for(int i = 0; i < L; i++) {
 	for(int a = 0; a < q; a++) {
-	  double gradh = fm[i*q+a] - fm_s[i*q+a];	
+	  double gradh = fm[i*q+a] - mstat->fm_s[i*q+a];	
 	  double lrh=params->lrateh;
 	  if (params->learn_strat == 1) {
 	    Gh[i*q+a]+=gradh*gradh;
@@ -710,7 +844,8 @@ int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vect
 	  n++;
 	  for(int j = i+1; j < L; j++) {
 	    for(int b = 0; b <q; b++) {
-	      double gradJ=sm[i*q+a][j*q+b] - sm_s[i*q+a][j*q+b] - params->regJ1 * ( (J[i*q +a][j*q + b] > 0)  - (J[i*q +a][j*q+b] < 0) ) - params->regJ2 * J[i*q +a][j*q + b];
+	      double gradJ = sm[i*q+a][j*q+b] - mstat->sm_s[i*q+a][j*q+b] - 
+                       params->regJ1 * ( (J[i*q +a][j*q + b] > 0)  - (J[i*q +a][j*q+b] < 0) ) - params->regJ2 * J[i*q +a][j*q + b];
 	      double lrJ=params->lrateJ;
 	      if (params->learn_strat == 1) {
 		GJ[i*q+a][j*q+b]+=gradJ*gradJ;
@@ -736,7 +871,7 @@ int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vect
       double modv=0;
       for(int i = 0; i < L; i++) {
 	for(int a = 0; a < q; a++) {
-	  double gradh = fm[i*q+a] - fm_s[i*q+a];
+	  double gradh = fm[i*q+a] - mstat->fm_s[i*q+a];
 	  h[i*q+a] += params->lrateh * acc * Gh[i*q+a];
 	  Gh[i*q+a] += params->lrateh * acc * gradh;
 	  P+=gradh*Gh[i*q+a];
@@ -744,7 +879,7 @@ int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vect
 	  modv+=Gh[i*q+a]*Gh[i*q+a];
 	  for(int j = i+1; j < L; j++) {
 	    for(int b = 0; b <q; b++) {
-	      double gradJ=sm[i*q+a][j*q+b] - sm_s[i*q+a][j*q+b] - params->regJ1 * ( (J[i*q +a][j*q + b] > 0)  - (J[i*q +a][j*q+b] < 0) ) - params->regJ2 * J[i*q +a][j*q + b];
+	      double gradJ=sm[i*q+a][j*q+b] - mstat->sm_s[i*q+a][j*q+b] - params->regJ1 * ( (J[i*q +a][j*q + b] > 0)  - (J[i*q +a][j*q+b] < 0) ) - params->regJ2 * J[i*q +a][j*q + b];
 	      J[i*q + a][j*q + b] += params->lrateJ * acc * decJ[i*q + a][j*q + b] * GJ[i*q + a][j*q + b];
 	      J[j*q + b][i*q + a] = J[i*q + a][j*q + b];
 	      GJ[i*q + a][j*q + b] += params->lrateJ * acc * decJ[i*q + a][j*q + b] * gradJ;
@@ -760,10 +895,10 @@ int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vect
       modv=sqrt(modv);
       for(int i = 0; i < L; i++) {
 	for(int a = 0; a < q; a++) {
-	  Gh[i*q+a] = (1-alpha)*Gh[i*q+a] + alpha*(fm[i*q+a] - fm_s[i*q+a])/modF*modv;
+	  Gh[i*q+a] = (1-alpha)*Gh[i*q+a] + alpha*(fm[i*q+a] - mstat->fm_s[i*q+a])/modF*modv;
 	  for(int j = i+1; j < L; j++) {
 	    for(int b = 0; b <q; b++) {
-	      GJ[i*q+a][j*q + b] = (1-alpha)*GJ[i*q+a][j*q + b] + alpha*(sm[i*q+a][j*q+b] - sm_s[i*q+a][j*q+b])/modF*modv;
+	      GJ[i*q+a][j*q + b] = (1-alpha)*GJ[i*q+a][j*q + b] + alpha*(sm[i*q+a][j*q+b] - mstat->sm_s[i*q+a][j*q+b])/modF*modv;
 	    }
 	  }
 	}
@@ -834,11 +969,11 @@ int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vect
       if(decJ[i*q + a][j*q + b] > 0) {
 	m += 1;
 	if(params->dec_sdkl) {
-	  double auxsm = smalln * rand01() + sm_s[i*q+a][j*q+b];
+	  double auxsm = smalln * rand01() + mstat->sm_s[i*q+a][j*q+b];
 	  sorted_struct[k] = J[i*q+a][j*q+b]*auxsm - (J[i*q+a][j*q+b]*exp(-J[i*q+a][j*q+b])*auxsm)/(exp(-J[i*q+a][j*q+b])*auxsm+1-auxsm);
 	  sorted_struct[k] += rand01() * smalln;
 	} else if(params->dec_f) {
-	  sorted_struct[k] = smalln * rand01() + fabs(sm_s[i*q+a][j*q+b]);
+	  sorted_struct[k] = smalln * rand01() + fabs(mstat->sm_s[i*q+a][j*q+b]);
 	} else if(params->dec_J) {
 	  sorted_struct[k] = smalln * rand01() + fabs(J[i*q+a][j*q+b]);
 	}

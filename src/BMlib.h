@@ -23,15 +23,14 @@ class Params {
   char * file_msa, * file_freq, * file_w , * file_params, init, * label, * ctype, * file_3points, *file_cc, *file_samples, *file_en;
   bool Metropolis, Gibbs, nprinteq, rmgauge, dgap, gapnn, phmm, blockwise, compwise, persistent, initdata, overwrite, adapt, dec_sdkl, dec_f, dec_J;
   double sparsity, rho, w_th,  regJ1, regJ2, lrateJ, lrateh, conv, pseudocount, beta;
-  int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, Nmc_config, Twait, maxiter, dec_steps;
-
+  int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, Nmc_config, Twait, maxiter, dec_steps, num_threads;
+  
   Params();
 
   int read_params (int & argc, char ** argv);
   void print_learning_strategy();
   void construct_filenames(int iter, bool conv, char * par, char * par_zsum, char * score, char * first, char * sec, char * third);
 };
-
 
 class Data {
  public:
@@ -45,6 +44,7 @@ class Data {
   vector<float> tm; // Pay attention. File contains connected 3rd order correlations
   vector< vector<int> > tm_index;
   Params * params;
+
 
   Data(Params * _params);
 
