@@ -1,4 +1,4 @@
-CFLAGS=-Wall -O3 -g
+CFLAGS=-Wall -O3 -g -fopenmp
 CC=g++
 SRC= adabmDCA.cpp BMmc.cpp BMaux.cpp BMlib.cpp
 OBJ=$(SRC:.cpp = -o)
