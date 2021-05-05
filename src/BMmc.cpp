@@ -517,7 +517,6 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
 	      mstat->qs_t[numt][5]+=(oo1*oo1+oo2*oo2);
       }
     }
-    update_overlap(mstat->qs_t[numt]); 
   }
 
 
@@ -529,20 +528,10 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
 
   void Model::update_corr(int i, int value) {
 
-    omp_set_lock(&mstat->lock);
+    omp_set_lock(&(mstat->lock));
 	  mstat->corr[i]+=value;
-    omp_unset_lock(&mstat->lock);
+    omp_unset_lock(&(mstat->lock));
   }
-
-  void Model::update_overlap(vector <int> & qs) {
-
-    omp_set_lock(&mstat->lock);
-    for(int i = 0; i < int(mstat->qs.size()); i++)
-      mstat->qs[i] += qs[i];
-    omp_unset_lock(&mstat->lock);
-
-  }
-
 
   bool Model::sample(vector< vector<unsigned char> > & msa) {
     
@@ -555,14 +544,15 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
       mstat->qs[i] = 0;
     if (!params->persistent) 
       init_current_state(msa);
-    int s;
+   int s; 
 
-#pragma omp parallel for private(s)
+#pragma omp parallel for private(s) 
     for(int t = 0; t < params->num_threads; t++) {
       for(s = 0; s < params->Nmc_starts/2; s++) { 
         mc_chain(mstat->curr_state[t][2*s],mstat->curr_state[t][2*s+1]);
       }
     }
+  
 
     update_statistics();
     mstat->corr /= params->Nmc_starts;
@@ -642,6 +632,8 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     //if(params->file_en)
     //  fe = fopen(params->file_en, "w");
     for(int t = 0; t<params->num_threads; t++) {
+      for(int idx = 0; idx<int(mstat->qs.size()); idx++)
+        mstat->qs[idx] += mstat->qs_t[t][idx];
       for(int m = 0; m< int(mstat->synth_msa[t].size());m++) {
         x = mstat->synth_msa[t][m];
         if(params->file_samples) {
