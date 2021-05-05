@@ -25,13 +25,13 @@ double max(double x, double y);
 double min(double x, double y);
 int quicksort(vector<float> & x, vector<int> & tmp_idx, int first, int last);
 void permute(int * vector, int s); 
-int overlap(vector<int> & x1, vector<int> & x2); 
+int overlap(vector<unsigned char> & x1, vector<unsigned char> & x2); 
 int convert_char_amino(char a);
 int convert_char_nbase(char a);
 int convert_char_epi(char a);
 int convert_char_ising(char a);
-int print_alphabet(char * ctype);
-vector <char> alphabet(char * ctype);
+int print_alphabet(char ctype);
+vector <char> alphabet(char ctype);
 int print_frobenius_norms(vector<float> & h, vector< vector<float> > & J, int L, int q, char *normfile, char *parfile); 
 
 #endif

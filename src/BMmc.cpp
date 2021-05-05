@@ -21,7 +21,7 @@ using namespace std;
 
 
 
-Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<int> > & msa, int _ntm, vector< vector<int> > * _tm_index):
+Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<unsigned char> > & msa, int _ntm, vector< vector<int> > * _tm_index):
   q(_q),L(_L),h(L*q,0),J(L*q,h),decJ(L*q,vector<unsigned char>(L*q,0)),tm_index(_tm_index),
   Gibbs(false),params(_params),mstat(_mstat),alpha(0.1),acc(1),counter(0),model_sp(0) {
 
@@ -51,22 +51,36 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
     mstat->synth_msa.resize(params->num_threads);
     mstat->curr_state.clear();
     mstat->curr_state.resize(params->num_threads);
+    mstat->qs_t.clear();
+    mstat->qs_t.resize(params->num_threads, vector<int>(6));
+    mstat->old_state1.clear();
+    mstat->old_state2.clear();
+    mstat->oldold_state1.clear();
+    mstat->oldold_state2.clear();
+    mstat->x2i.clear();
+    mstat->x1i.clear();
+    mstat->x2i.resize(params->num_threads,vector<unsigned char>(L));
+    mstat->x1i.resize(params->num_threads,vector<unsigned char>(L));
+    mstat->old_state1.resize(params->num_threads, vector<unsigned char>(L));
+    mstat->old_state2.resize(params->num_threads, vector<unsigned char>(L));
+    mstat->oldold_state1.resize(params->num_threads, vector<unsigned char>(L));
+    mstat->oldold_state2.resize(params->num_threads, vector<unsigned char>(L));
     omp_init_lock(&mstat->lock);
 
   }
 
-  void Model::init_current_state(vector< vector<int> > & msa) {
+  void Model::init_current_state(vector< vector<unsigned char> > & msa) {
     
     for(int t = 0; t < params->num_threads; t++) {
       mstat->curr_state[t].clear();
       if (!params->initdata) {
-        vector<int> tmp(L);
+        vector<unsigned char> tmp(L);
         for(int s = 0; s < params->Nmc_starts; s++) {
 	        for(int i = 0; i < L; i++) {
-	          if(!strcmp(params->ctype, "i"))
-	            tmp[i] = (rand01() > 0.5) ? 1 : 0;
+	          if(params->ctype == 'i')
+	            tmp[i] = (unsigned char)(rand01() > 0.5) ? 1 : 0;
 	          else
-	            tmp[i] = (int)rand() % q;
+	            tmp[i] = (unsigned char)(int)rand() % q;
 	        }
 	        mstat->curr_state[t].push_back(tmp);
         }
@@ -84,40 +98,42 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
     }
   }
 
-  int Model::remove_gauge_freedom(vector< vector<float> > & cov) {
-    vector<float> sorted_matrix(q*q,0);
-    vector<int> mapping(q*q);
+  int Model::remove_gauge_freedom(vector<vector<float> > &cov) {
+    vector<float> sorted_matrix(q * q, 0);
+    vector<int> mapping(q * q);
     double smalln = min(1e-30, params->pseudocount);
-    int idx_aux[q*q][2];
+    int idx_aux[q * q][2];
     int neff = 0;
-    for(int i = 0; i < L; i++) {
-      for(int j = i+1; j < L;j++) {
-	int k = 0;
-	for(int a = 0; a < q; a++) {
-	  for(int b = 0; b < q; b++){
-	    mapping[k] = k;
-	    idx_aux[k][0] = a;
-	    idx_aux[k][1] = b;
-	    sorted_matrix[k] = fabs(cov[i*q+a][j*q+b]) + smalln * rand01();
-	    k += 1;
-	  }
-	}
-	quicksort(sorted_matrix, mapping, 0, q*q - 1);
-	for(k = 0; k < 2*q-1; k++) {
-	  int a = idx_aux[mapping[k]][0];
-	  int b = idx_aux[mapping[k]][1];
-	  if (decJ[i*q+a][j*q+b] > 0) neff++;
-	  J[i*q+a][j*q+b] = 0.0;
-	  decJ[i*q+a][j*q+b] = 0;
-	  J[j*q+b][i*q+a] = 0.0;
-	  decJ[j*q+b][i*q+a] = 0;
-	}
+    for (int i = 0; i < L; i++) {
+      for (int j = i + 1; j < L; j++){
+        int k = 0;
+        for (int a = 0; a < q; a++) {
+          for (int b = 0; b < q; b++)
+          {
+            mapping[k] = k;
+            idx_aux[k][0] = a;
+            idx_aux[k][1] = b;
+            sorted_matrix[k] = fabs(cov[i * q + a][j * q + b]) + smalln * rand01();
+            k += 1;
+          }
+        }
+        quicksort(sorted_matrix, mapping, 0, q * q - 1);
+        for (k = 0; k < 2 * q - 1; k++) {
+          int a = idx_aux[mapping[k]][0];
+          int b = idx_aux[mapping[k]][1];
+          if (decJ[i * q + a][j * q + b] > 0)
+            neff++;
+          J[i * q + a][j * q + b] = 0.0;
+          decJ[i * q + a][j * q + b] = 0;
+          J[j * q + b][i * q + a] = 0.0;
+          decJ[j * q + b][i * q + a] = 0;
+        }
       }
     }
     cout << " " << neff << " couplings have been removed" << endl;
     return 0;
   }
-   
+
   int Model::initialize_parameters(vector<float> & fm) {        /* {READ J,H FROM FILE} OR {SET J,H=0 OR H=IND.SITE.MODEL} */
     if (params->Metropolis && !params->Gibbs) {
       Gibbs=false;
@@ -141,7 +157,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
 	while(!feof(filep) && fgets(buffer,100, filep) && sscanf(buffer, "%c ", &c) == 1) {
 	  switch (c) {
 	  case 'J':
-	    if(!strcmp(params->ctype, "i")) {
+	    if(params->ctype == 'i') {
 	      sscanf(buffer, "J %d %d %lf \n", &i, &j, &tmp);
 	      J[i][j] = params->beta * tmp;
 	      J[j][i] = params->beta * tmp;
@@ -152,7 +168,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
 	    }
 	    break;
 	  case 'j':
-	    if(!strcmp(params->ctype, "i")) {
+	    if(params->ctype == 'i') {
 	      sscanf(buffer, "j %d %d %lf \n", &i, &i, &tmp);
 	      J[i][j] = params->beta * tmp;
 	      J[j][i] = params->beta * tmp;
@@ -163,7 +179,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
 	    }
 	    break;
 	  case 'H':
-	    if(!strcmp(params->ctype, "i")){
+	    if(params->ctype == 'i'){
 		sscanf(buffer, "H %d %lf \n", &i, &tmp);
 		h[i] = params-> beta*tmp;
 	    } else {
@@ -172,7 +188,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
 	    }
 	    break;
 	  case 'h':
-	    if(!strcmp(params->ctype, "i")) {
+	    if(params->ctype ==  'i') {
 	      sscanf(buffer, "h %d %lf \n", &i, &tmp);
 	      h[i] = params->beta * tmp;
 	    } else {
@@ -305,7 +321,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
   int Model::print_model(char *filename) {
     ofstream fp;
     fp.open(filename);
-    if(!strcmp(params->ctype, "i")) {
+    if(params->ctype == 'i') {
       for(int i = 0; i < L; i++) {
 	for(int j = i+1; j < L; j++) {
 	  fp << "J " << i << " " << j << " " << J[i][j] << endl;
@@ -335,10 +351,10 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
 
   /******************** METHODS FOR MONTE CARLO ***********************************************************/
 
-  double Model::prof_energy(vector<int> & seq) {
+  double Model::prof_energy(vector<unsigned char> & seq) {
     double en = 0;  
     for(int i = 0; i < L; i++) {
-      if(!strcmp(params->ctype, "i"))
+      if(params->ctype == 'i')
 	en += -h[i] * (2.0*seq[i]-1.0);
       else
 	en += -h[i*q + seq[i]];
@@ -346,11 +362,11 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
     return en;
   }
 
-  double Model::DCA_energy(vector<int> & seq) {
+  double Model::DCA_energy(vector<unsigned char> & seq) {
     double en = 0;
     for(int i = 0; i < L; i++) {
       for(int j = i+1; j < L; j++) {
-	if(!strcmp(params->ctype, "i"))
+	if(params->ctype == 'i')
 	  en += -J[i][j] * (2.0*seq[i]-1.0) * (2.0*seq[j]-1.0);
 	else
 	  en += -J[i*q + seq[i]][j*q +seq[j]];
@@ -359,15 +375,15 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
     return en;
   }
 
-  double Model::energy(vector<int> & seq) {
+  double Model::energy(vector<unsigned char> & seq) {
     double en = 0;  
     for(int i = 0; i < L; i++) {
-      if(!strcmp(params->ctype, "i"))
+      if(params->ctype == 'i')
 	en += -h[i] * (2.0*seq[i]-1.0);
       else
 	en += -h[i*q + seq[i]];
       for(int j = i+1; j < L; j++) {
-	if(!strcmp(params->ctype, "i")) 
+	if(params->ctype == 'i') 
 	  en += -J[i][j] * (2.0*seq[i]-1.0) * (2.0*seq[j]-1.0);
 	else
 	  en += -J[i*q + seq[i]][j*q +seq[j]];
@@ -376,25 +392,25 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
     return en;
   }
 
-  void Model::metropolis_step(vector<int> & x) {
+  void Model::metropolis_step(vector<unsigned char> & x) {
     int i = (int)rand() % L;
     int a;
     double deltaE;
-    if(!strcmp(params->ctype, "i")) {
+    if(params->ctype == 'i') {
       a  = (x[i] == 0) ? 1 : 0;
-    } else {
+    } else { 
       a = (int)rand() % q;
       while(a == x[i])
-	a = (int)rand() %q;
+	      a = (int)rand() %q;
     }
-    if(!strcmp(params->ctype, "i")) {
+    if(params->ctype == 'i') {
       deltaE = -h[i] * (2.0*a-1.0) + h[i] * (2.0*x[i]-1.0);
       for(int j = 0; j < L; j++)
-	deltaE += -J[i][j] * (2.0*a-1.0)*(2.0*x[j]-1.0) + J[i][j] * (2.0*x[i]-1.0)*(2.0*x[j]-1.0);
-    } else {
+	      deltaE += -J[i][j] * (2.0*a-1.0)*(2.0*x[j]-1.0) + J[i][j] * (2.0*x[i]-1.0)*(2.0*x[j]-1.0);
+    } else { 
       deltaE = -h[i*q + a] + h[i*q + x[i]];
       for(int j = 0; j < L; j++) if(j != i) {
-	deltaE += - J[i*q + a][j*q + x[j]] + J[i*q + x[i]][j*q + x[j]];
+	      deltaE += - J[i*q + a][j*q + x[j]] + J[i*q + x[i]][j*q + x[j]];
       }
     }
     double p = rand01();
@@ -403,11 +419,11 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
     }
   }
 
-  void Model::gibbs_step(vector<int> & x) {
+  void Model::gibbs_step(vector<unsigned char> & x) {
     double H, cum[q];
     int i = (int)rand() % L;
     for(int a = 0; a < q; a++) {
-      if(!strcmp(params->ctype, "i")) {
+      if(params->ctype == 'i') {
 	H = -h[i] * (2.0*a-1.0);
 	for(int j = 0; j <L; j++) if(i!=j) {
 	  H += -J[i][j] * (2.0*a-1.0) * (2.0*x[j]-1.0);
@@ -423,7 +439,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
       else 
 	cum[a] = cum[a-1] + exp(-H);
     }
-    if(!strcmp(params->ctype, "i")) {
+    if(params->ctype == 'i') {
       double r = rand01();
       if(r > cum[0])
 	x[i] = 1;
@@ -439,7 +455,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
     }
   }
 
-  void Model::MC_sweep(vector<int> & x) {
+  void Model::MC_sweep(vector<unsigned char> & x) {
     if (!Gibbs) {
       for (int i=0;i<L;i++) metropolis_step(x);
     } else {
@@ -447,15 +463,17 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
     }
   }
 
-  void Model::mc_chain(vector<int> & x1, vector<int> & x2) {
+  void Model::mc_chain(vector<unsigned char> & x1, vector<unsigned char> & x2) {
     //cout << omp_get_thread_num() << endl;
-    //cout << params << " " << omp_get_thread_num() << endl;
+    // cout << &(J[0]) << " " << omp_get_thread_num() << endl;
+    //printf("Address of x is %p\n", (void **)J);  
+    int numt = omp_get_thread_num();
     for(int t=0; t < params->Teq; t++) {
       MC_sweep(x1);
       MC_sweep(x2);
     }
-    valarray<int> qs(6);
-    vector<int> old_state1, old_state2, oldold_state1, oldold_state2;
+    //valarray<int> qs(6);
+    //vector<int> old_state1, old_state2, oldold_state1, oldold_state2;
     //update_statistics_lock(x1,fp,fe);
     //update_statistics_lock(x2,fp,fe);
     update_synth_msa(x1, x2);
@@ -464,16 +482,17 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
     //  update_tm_statistics(x2);
     //}
     double o12=overlap(x1,x2);
-    qs[0]+=o12;
-    qs[1]+=(o12*o12);
-    vector<int> x1i=x1, x2i=x2;
+    mstat->qs_t[numt][0]+= o12;
+    mstat->qs_t[numt][1]+= (o12*o12);
+    mstat->x1i[numt]=x1;
+    mstat->x2i[numt]=x2;
     for(int n = 0; n < params->Nmc_config - 1; n++) { 
-      oldold_state1=old_state1;
-      oldold_state2=old_state2;
-      old_state1=x1;
-      old_state2=x2;
+      mstat->oldold_state1[numt] = mstat->old_state1[numt];
+      mstat->oldold_state2[numt] = mstat->old_state2[numt];
+      mstat->old_state1[numt]=x1;
+      mstat->old_state2[numt]=x2;
       for(int t=0; t < params->Twait; t++) {
-        update_corr(n*params->Twait+t,(overlap(x1,x1i)+overlap(x2,x2i)));
+        update_corr(n*params->Twait+t,overlap(x1,mstat->x1i[numt])+overlap(x2,mstat->x2i[numt]));
 	      MC_sweep(x1);
 	      MC_sweep(x2);
       }
@@ -485,24 +504,24 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
 	    //  update_tm_statistics(x2);
       //}
       o12=overlap(x1,x2);
-      qs[0]+=o12;
-      qs[1]+=(o12*o12);
-      double o1=overlap(old_state1,x1);
-      double o2=overlap(old_state2,x2);
-      qs[2]+=(o1+o2);
-      qs[3]+=(o1*o1+o2*o2);
+      mstat->qs_t[numt][0]+=o12;
+      mstat->qs_t[numt][1]+=(o12*o12);
+      double o1=overlap(mstat->old_state1[numt],x1);
+      double o2=overlap(mstat->old_state2[numt],x2);
+      mstat->qs_t[numt][2]+=(o1+o2);
+      mstat->qs_t[numt][3]+=(o1*o1+o2*o2);
       if (n>0) {
-	      double oo1=overlap(oldold_state1,x1);
-	      double oo2=overlap(oldold_state2,x2);
-	      qs[4]+=(oo1+oo2);
-	      qs[5]+=(oo1*oo1+oo2*oo2);
+	      double oo1=overlap(mstat->oldold_state1[numt],x1);
+	      double oo2=overlap(mstat->oldold_state2[numt],x2);
+	      mstat->qs_t[numt][4]+=(oo1+oo2);
+	      mstat->qs_t[numt][5]+=(oo1*oo1+oo2*oo2);
       }
     }
-    update_overlap(qs); 
+    update_overlap(mstat->qs_t[numt]); 
   }
 
 
-  void Model::update_synth_msa(vector<int> & x1, vector<int> & x2) {
+  void Model::update_synth_msa(vector<unsigned char> & x1, vector<unsigned char> & x2) {
 
     mstat->synth_msa[omp_get_thread_num()].push_back(x1);
     mstat->synth_msa[omp_get_thread_num()].push_back(x2);
@@ -515,35 +534,38 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
     omp_unset_lock(&mstat->lock);
   }
 
-  void Model::update_overlap(valarray<int> & qs) {
+  void Model::update_overlap(vector <int> & qs) {
 
     omp_set_lock(&mstat->lock);
-    for(int i = 0; i <6; i++)
+    for(int i = 0; i < int(mstat->qs.size()); i++)
       mstat->qs[i] += qs[i];
     omp_unset_lock(&mstat->lock);
 
   }
 
 
-  bool Model::sample(vector< vector<int> > & msa) {
+  bool Model::sample(vector< vector<unsigned char> > & msa) {
     
     bool eqmc = true;
     init_statistics();
+    mstat->corr.resize((params->Nmc_config-1)*params->Twait);
     for(int i =0; i <int(mstat->corr.size()); i++)
       mstat->corr[i] = 0.0;
     for(int i =0; i<int(mstat->qs.size());i++)
       mstat->qs[i] = 0;
     if (!params->persistent) 
       init_current_state(msa);
-    int s; 
-#pragma omp parallel for private(s) 
+    int s;
+
+#pragma omp parallel for private(s)
     for(int t = 0; t < params->num_threads; t++) {
       for(s = 0; s < params->Nmc_starts/2; s++) { 
         mc_chain(mstat->curr_state[t][2*s],mstat->curr_state[t][2*s+1]);
       }
     }
+
     update_statistics();
-    mstat->corr/=params->Nmc_starts;
+    mstat->corr /= params->Nmc_starts;
     char filename_aux[1000];
     sprintf(filename_aux, "corr_%s.dat", params->label);
     ofstream fileout;
@@ -591,8 +613,11 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
     }
     for(int ind = 0; ind < int(mstat->tm_s.size()); ind++) 
       mstat->tm_s[ind] = 0;
-    for(int i = 0; i < params->num_threads;i++) 
+    for(int i = 0; i < params->num_threads;i++) {
       mstat->synth_msa[i].clear();
+      for(int j = 0; j < int(mstat->qs_t[i].size()); j++)
+        mstat->qs_t[i][j] = 0;
+    }
     FILE * fp;
     if(params->file_samples) {
       fp  = fopen(params->file_samples, "w");
@@ -609,7 +634,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
     int i, j, k, a, b, c;
     int Ns = params->Nmc_starts * params->Nmc_config * params->num_threads;
     FILE * fp = 0;
-    vector <int> x;
+    vector <unsigned char> x;
 
     vector <char> abc = alphabet(params->ctype);
     if(params->file_samples)
@@ -623,14 +648,14 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
           fprintf(fp, ">THREAD%d_CHAIN%d_SAMPLE%d h_en %lf J_en %lf \n", t,
             m/params->Nmc_config, m%params->Nmc_config, prof_energy(x), DCA_energy(x));
           for(int i = 0; i<L;i++) {
-            if(!strcmp(params->ctype, "i"))
+            if(params->ctype == 'i')
               fprintf(fp, "%d", x[i]);
             else
               fprintf(fp, "%c", abc[x[i]]);
           }
           fprintf(fp, "\n");
         }
-        if(!strcmp(params->ctype, "i")) {
+        if(params->ctype == 'i') {
           for(int i = 0; i<L; i++) {
 	          mstat->fm_s[i] += 1.0/Ns * (2.0*x[i]-1.0);
 	          mstat->sm_s[i][i] += 1.0/Ns;
@@ -650,7 +675,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
           }
         }
         for(int ind = 0; ind < int((*tm_index).size()); ind ++) {
-          if(!strcmp(params->ctype, "i")) {
+          if(params->ctype == 'i') {
 	          i = (*tm_index)[ind][0];
 	          j = (*tm_index)[ind][1];
 	          k = (*tm_index)[ind][2];
@@ -675,10 +700,10 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
     //  fclose(fe);
   }
 
-  void Model::update_statistics_lock(vector<int> & x, FILE * fp, FILE * fe) {
+  void Model::update_statistics_lock(vector<unsigned char> & x, FILE * fp, FILE * fe) {
     int Ns = params->Nmc_starts * params->Nmc_config;
     omp_set_lock(&mstat->lock);
-    if(!strcmp(params->ctype, "i")) {
+    if(params->ctype == 'i') {
       for(int i = 0; i<L; i++) {
 	      mstat->fm_s[i] += 1.0/Ns * (2.0*x[i]-1.0);
 	      mstat->sm_s[i][i] += 1.0/Ns;
@@ -708,12 +733,12 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
     omp_unset_lock(&mstat->lock);
   }
 
-  void Model::update_tm_statistics(vector<int> & x) {
+  void Model::update_tm_statistics(vector<unsigned char> & x) {
     int i, j, k, a, b, c;
     int Ns = params->Nmc_starts * params->Nmc_config;
     omp_set_lock(&mstat->lock);
     for(int ind = 0; ind < int((*tm_index).size()); ind ++) {
-      if(!strcmp(params->ctype, "i")) {
+      if(params->ctype == 'i') {
 	      i = (*tm_index)[ind][0];
 	      j = (*tm_index)[ind][1];
 	      k = (*tm_index)[ind][2];
@@ -734,7 +759,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<in
 
  void Model::compute_third_order_correlations() {
     int ind, i, j, k, a, b, c;
-    if(!strcmp(params->ctype, "i")) {
+    if(params->ctype == 'i') {
       for(ind = 0; ind < int((*tm_index).size()); ind++) {
       	i = (*tm_index)[ind][0];
 	      j = (*tm_index)[ind][1];

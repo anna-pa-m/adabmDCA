@@ -23,7 +23,7 @@ Params::Params() {
     file_params =0;
     init = 'R';
     label = (char *) "nolabel";
-    ctype = (char *) "a";
+    ctype = 'a';
     file_3points =0;
     file_cc = 0;
     file_samples = 0;
@@ -76,7 +76,7 @@ Params::Params() {
 				num_threads = atoi(optarg);
 				break;
 			case 'b':
-				ctype = optarg;
+				ctype = optarg[0];
 				break;
 			case 'd':
 				pseudocount = atof(optarg);
@@ -428,36 +428,36 @@ Data::Data(Params * _params):
       cerr << "I couldn't open " << filename << endl;
       exit(EXIT_FAILURE);
     }
-    vector<int> auxseq;
+    vector<unsigned char> auxseq;
     M = 0;
     L = 0;
     msa.clear();
     while((ch = fgetc(filemsa)) != EOF) {
       if (ch == '>') {
-	newseq = 1;
-	readseq = 0;
+		newseq = 1;
+		readseq = 0;
       } else if (ch == '\n' && newseq == 1) {
-	readseq = 1;
-	newseq = 0;
-	auxseq.clear();
+		readseq = 1;
+		newseq = 0;
+		auxseq.clear();
       } else if (ch != '\n' && newseq == 0 && readseq == 1) {
-	if(!strcmp(params->ctype, "a"))
-	  auxseq.push_back(convert_char_amino(ch));
-	else if(!strcmp(params->ctype, "n"))
-	  auxseq.push_back(convert_char_nbase(ch));
-	else if(!strcmp(params->ctype, "i"))
-	  auxseq.push_back(convert_char_ising(ch));
-	else if(!strcmp(params->ctype, "e"))
-	  auxseq.push_back(convert_char_epi(ch));
+		if(params->ctype == 'a')
+	  		auxseq.push_back(convert_char_amino(ch));
+		else if(params->ctype == 'n')
+	  		auxseq.push_back(convert_char_nbase(ch));
+		else if(params->ctype == 'i')
+	  		auxseq.push_back(convert_char_ising(ch));
+		else if(params->ctype == 'e')
+	  		auxseq.push_back(convert_char_epi(ch));
       } else if (ch == '\n' && newseq == 0 && readseq == 1) {
-	if (L == 0) {
-	  L = int(auxseq.size());
-	} else if (L!=int(auxseq.size())) {
-	  cout<<"MSA reading error!"<<endl;
-	  exit(1);
-	}
-	readseq = 0;
-	msa.push_back(auxseq);
+		if (L == 0) {
+	  		L = int(auxseq.size());
+		} else if (L!=int(auxseq.size())) {
+	  		cout<<"MSA reading error!"<<endl;
+	  		exit(1);
+		}
+		readseq = 0;
+		msa.push_back(auxseq);
       }
     }
     M = int(msa.size());
@@ -532,18 +532,17 @@ Data::Data(Params * _params):
 
   void Data::compute_empirical_statistics() {
     cout << "Computing empirical statistics...";
-    fflush(stdout);
     Meff = 0;
     for(int m = 0; m < M; m++) {
       Meff += w[m];
       for(int i = 0; i < L; i++) {
-	if(!strcmp(params->ctype, "i")) {
+	if(params->ctype == 'i') {
 	  fm[i] += w[m] * (2.0*msa[m][i] - 1.0);
 	} else {
 	  fm[i*q + msa[m][i]] += w[m];
 	}
 	for(int j = i+1; j < L; j++) {
-	  if(!strcmp(params->ctype, "i")) {
+	  if(params->ctype == 'i') {
 	    sm[i][j] += w[m] * (2.0*msa[m][i]-1.0) * (2.0*msa[m][j]-1.0);
 	  } else {
 	    sm[i*q + msa[m][i]][j*q + msa[m][j]] += w[m];
@@ -554,7 +553,7 @@ Data::Data(Params * _params):
     if(!params->pseudocount)
       params->pseudocount = 1.0/(1+Meff);
     for(int i = 0; i < L*q; i++) {
-      if(!strcmp(params->ctype, "i")) {
+      if(params->ctype == 'i') {
 	fm[i] = (1-params->pseudocount)*fm[i]/Meff;
 	sm[i][i] = fm[i];
       } else {	
@@ -566,7 +565,7 @@ Data::Data(Params * _params):
       for(int j = i+1; j < L; j++) {
 	for (int a = 0; a < q; a++) {
 	  for(int b = 0; b < q; b++) {
-	    if(!strcmp(params->ctype, "i")) {
+	    if(params->ctype == 'i') {
 	      sm[i][j] = (1-params->pseudocount)*sm[i][j]/Meff;
 	      sm[j][i] = sm[i][j];
 	    } else {
@@ -579,11 +578,10 @@ Data::Data(Params * _params):
     }
     for(int i = 0; i < L*q; i++) {
       for(int j = 0; j < L*q; j++) {
-	cov[i][j] = sm[i][j] - fm[i]*fm[j];
+		cov[i][j] = sm[i][j] - fm[i]*fm[j];
       }
     }
     cout << "Meff: " << Meff << endl;
-    fflush(stdout);
   }
   
   void Data::read_freq() {    
@@ -615,16 +613,16 @@ Data::Data(Params * _params):
       switch(t) {
       case 's':
 	sscanf(tmp, "s %d %d %c %c %lf \n", &i, &j, &cha, &chb, &aux);  
-	if(!strcmp(params->ctype, "a")) {
+	if(params->ctype == 'a') {
 	  a = convert_char_amino(cha); 
 	  b = convert_char_amino(chb);
-	} else if(!strcmp(params->ctype, "n")) {
+	} else if(params->ctype == 'n') {
 	  a = convert_char_nbase(cha);
 	  b = convert_char_nbase(chb);
-	} else if(!strcmp(params->ctype, "i")) {
+	} else if(params->ctype == 'i') {
 	  a = convert_char_ising(cha);
 	  b = convert_char_ising(chb);
-	} else if(!strcmp(params->ctype, "e")) {
+	} else if(params->ctype == 'e') {
 	  a = convert_char_epi(cha);
 	  b = convert_char_epi(chb);
 	}
@@ -635,13 +633,13 @@ Data::Data(Params * _params):
 	break;
       case 'm':
 	sscanf(tmp, "m %d %c %lf \n", &i, &ch, &aux);
-	if(!strcmp(params->ctype, "a"))  
+	if(params->ctype == 'a')  
 	  a = convert_char_amino(ch);
-	else if(!strcmp(params->ctype, "n")) 
+	else if(params->ctype == 'n') 
 	  a = convert_char_nbase(ch);
-	else if(!strcmp(params->ctype, "i")) 
+	else if(params->ctype == 'i') 
 	  a = convert_char_ising(ch);
-	else if(!strcmp(params->ctype, "e")) 
+	else if(params->ctype == 'e') 
 	  a = convert_char_epi(ch);
 	fm[i*q+a] = aux;
 	break;
@@ -669,7 +667,7 @@ Data::Data(Params * _params):
 	tm_index.clear();
 	tm.clear();
 	while (!feof(file3) && fgets(buffer, 1000, file3)) {
-	  if(!strcmp(params->ctype, "i")){
+	  if(params->ctype == 'i'){
 	    vector<int> tmp_vec(3,0);
 	    if(sscanf(buffer, "%d %d %d %lf \n", &i, &j, &k, &value) == 4) {
 	      tmp_vec[0] = i;
@@ -695,7 +693,7 @@ Data::Data(Params * _params):
 	cout << "Number of indices " << (int)tm_index.size() << endl;
 	// compute 3rd order moments of msa, slow!
 	for(int ind =0; ind < int(tm_index.size()); ind++) {
-	  if(!strcmp(params->ctype, "i")) {
+	  if(params->ctype == 'i') {
 	    i = tm_index[ind][0];
 	    j = tm_index[ind][1];
 	    k = tm_index[ind][2];
@@ -738,7 +736,7 @@ Data::Data(Params * _params):
     ofstream ft;
     fs.open(file_sm);
     ff.open(file_fm);
-    if(!strcmp(params->ctype, "i")) {
+    if(params->ctype == 'i') {
       for(int i = 0; i <L; i++) {
 	for(int j= i+1; j < L; j++)
 	  fs << i << " " << j << " " << sm[i][j] << " " << sm_s[i][j] << " " << cov[i][j] << " " << sm_s[i][j] - fm_s[i]*fm_s[j] << endl;

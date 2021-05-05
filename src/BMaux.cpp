@@ -81,7 +81,7 @@ void permute(int * vector, int s) {
   }
 }
 
-int overlap(vector<int> & x1, vector<int> & x2) {
+int overlap(vector<unsigned char> & x1, vector<unsigned char> & x2) {
   int q=0;
   for (int i=0; i<int(x1.size()); i++) {
     if (x1[i]==x2[i]) q++;
@@ -178,7 +178,7 @@ int convert_char_amino(char a) {
 			cerr << a << "not recognized" << endl;
 			return(EXIT_FAILURE);
 	}
-	return i;
+	return (unsigned char)i;
 }
 
 int convert_char_nbase(char a) {
@@ -207,7 +207,7 @@ int convert_char_nbase(char a) {
 			i = 0;
 			break;
 	}
-	return i;
+	return (unsigned char)i;
 
 }
 
@@ -269,7 +269,7 @@ int convert_char_epi(char a) {
 			break;
 			//return(EXIT_FAILURE);
 	}
-	return i;
+	return (unsigned char)i;
 }
 
 int convert_char_ising(char a){
@@ -297,25 +297,22 @@ int convert_char_ising(char a){
 			cerr << a << "not recognized" << endl;
 			return(EXIT_FAILURE);
 	}
-	return i;
+	return (unsigned char)i;
 }
 
-int print_alphabet(char * ctype) {
-  if(ctype == NULL) {
-    cerr << "Error in alphabet pointer" << endl;
-    exit(EXIT_FAILURE);
-  }  
+int print_alphabet(char ctype) {
+ 
   int q=0;
-  if(!strcmp(ctype, "a")) {
+  if(ctype == 'a') {
     cout << "Using alphabet: -ACDEFGHIKLMNPQRSTVWY" << endl;
     q=21;
-  } else if(!strcmp(ctype, "n")) {
+  } else if(ctype == 'n') {
     cout << "Using alphabet: -AUCG" << endl;
     q = 5;
-  } else if(!strcmp(ctype, "i")) {
+  } else if(ctype == 'i') {
     cout << "Using alphabet: {-1,1} spins. Input: AP (absent/present) or ud (down/up) or binary {0,1}" << endl;
     q = 1;
-  } else if(!strcmp(ctype, "e")) {
+  } else if(ctype == 'e') {
     cout << "Using alphabet: -AF5TtGEZhBbeRrq \n" << endl;
 	q = 16;
   } else {
@@ -325,22 +322,19 @@ int print_alphabet(char * ctype) {
   return q;
 }
 
-vector<char> alphabet(char * ctype) {
-  if(ctype == NULL) {
-    fprintf(stdout, "Error in alphabet pointer\n");
-    exit(EXIT_FAILURE);
-  }  
+vector<char> alphabet(char ctype) {
+ 
   vector<char> ris;
-  if(!strcmp(ctype, "a")) {
+  if(ctype == 'a') {
     char app[] = "-ACDEFGHIKLMNPQRSTVWY\n";
     ris= vector<char>(app, app + sizeof(app) / sizeof(char) );
-  } else if(!strcmp(ctype, "n")) {
+  } else if(ctype == 'n') {
     char app[] = "-AUCG";
     ris= vector<char>(app, app + sizeof(app) / sizeof(char) );
-  } else if(!strcmp(ctype, "i")) {
+  } else if(ctype == 'i') {
     char app[] = "01";
     ris= vector<char>(app, app + sizeof(app) / sizeof(char) );
-  } else if(!strcmp(ctype, "e")) {
+  } else if(ctype == 'e') {
     char app[] = "-AF5TtGEZhBbeRrq";
     ris= vector<char>(app, app + sizeof(app) / sizeof(char) );
   } else {
