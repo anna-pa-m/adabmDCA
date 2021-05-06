@@ -85,8 +85,8 @@ class Model {
   void gibbs_step_ising(vector<unsigned char> & x);
   void MC_sweep(vector<unsigned char> & x);
   void MC_sweep_ising(vector<unsigned char> & x);
-  void mc_chain_ising(vector<unsigned char> & x1, vector<unsigned char> & x2);
-  void mc_chain(vector<unsigned char> & x1, vector<unsigned char> & x2);
+  void mc_chain_ising(vector<unsigned char> & x1, vector<unsigned char> & x2, int s);
+  void mc_chain(vector<unsigned char> & x1, vector<unsigned char> & x2, int s);
   void update_overlap(vector <int> & qs);
   void update_corr(int i, int value);
   bool sample(vector< vector<unsigned char> > & msa);

@@ -52,6 +52,10 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     mstat->corr.resize((params->Nmc_config-1)*params->Twait);
     mstat->synth_msa.clear();
     mstat->synth_msa.resize(params->num_threads);
+    for(int i = 0; i<params->num_threads;i++ ) {
+      mstat->synth_msa[i].clear();
+      mstat->synth_msa[i].resize(params->Nmc_config * params->Nmc_starts, vector <unsigned char>(L));
+    }
     mstat->curr_state.clear();
     mstat->curr_state.resize(params->num_threads);
     mstat->qs_t.clear();
@@ -515,7 +519,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     }
   }
 
-  void Model::mc_chain_ising(vector<unsigned char> & x1, vector<unsigned char> & x2) {
+  void Model::mc_chain_ising(vector<unsigned char> & x1, vector<unsigned char> & x2, int s) {
     
     int numt = omp_get_thread_num();
     for(int t=0; t < params->Teq; t++) {
@@ -526,7 +530,10 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     //vector<int> old_state1, old_state2, oldold_state1, oldold_state2;
     //update_statistics_lock(x1,fp,fe);
     //update_statistics_lock(x2,fp,fe);
-    update_synth_msa(x1, x2);
+    //update_synth_msa(x1, x2);
+    mstat->synth_msa[numt][(2*s)*params->Nmc_config]=x1;
+    mstat->synth_msa[numt][(2*s+1)*params->Nmc_config]=x2;
+
     //if(int(mstat->tm_s.size())>0) {
     //  update_tm_statistics(x1);
     //  update_tm_statistics(x2);
@@ -548,7 +555,10 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
       }
       //update_statistics_lock(x1,fp,fe);
       //update_statistics_lock(x2,fp,fe);
-      update_synth_msa(x1, x2);
+      //update_synth_msa(x1, x2);
+
+      mstat->synth_msa[numt][(2*s)*params->Nmc_config+n+1]=x1;
+      mstat->synth_msa[numt][(2*s+1)*params->Nmc_config+n+1]=x2;
       //if(int(mstat->tm_s.size())>0) {
 	    //  update_tm_statistics(x1);
 	    //  update_tm_statistics(x2);
@@ -571,7 +581,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
 
 
 
-  void Model::mc_chain(vector<unsigned char> & x1, vector<unsigned char> & x2) {
+  void Model::mc_chain(vector<unsigned char> & x1, vector<unsigned char> & x2, int s) {
     //cout << omp_get_thread_num() << endl;
     // cout << &(J[0]) << " " << omp_get_thread_num() << endl;
     //printf("Address of x is %p\n", (void **)J);  
@@ -584,7 +594,9 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     //vector<int> old_state1, old_state2, oldold_state1, oldold_state2;
     //update_statistics_lock(x1,fp,fe);
     //update_statistics_lock(x2,fp,fe);
-    update_synth_msa(x1, x2);
+    //update_synth_msa(x1, x2);
+    mstat->synth_msa[numt][(2*s)*params->Nmc_config]=x1;
+    mstat->synth_msa[numt][(2*s+1)*params->Nmc_config]=x2;
     //if(int(mstat->tm_s.size())>0) {
     //  update_tm_statistics(x1);
     //  update_tm_statistics(x2);
@@ -606,7 +618,9 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
       }
       //update_statistics_lock(x1,fp,fe);
       //update_statistics_lock(x2,fp,fe);
-      update_synth_msa(x1, x2);
+      //update_synth_msa(x1, x2);
+      mstat->synth_msa[numt][(2*s)*params->Nmc_config+n+1]=x1;
+      mstat->synth_msa[numt][(2*s+1)*params->Nmc_config+n+1]=x2;
       //if(int(mstat->tm_s.size())>0) {
 	    //  update_tm_statistics(x1);
 	    //  update_tm_statistics(x2);
@@ -656,7 +670,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     #pragma omp parallel for private(s) 
     for(int t = 0; t < params->num_threads; t++) {
       for(s = 0; s < params->Nmc_starts/2; s++) { 
-        mc_chain_ising(mstat->curr_state[t][2*s],mstat->curr_state[t][2*s+1]);
+        mc_chain_ising(mstat->curr_state[t][2*s],mstat->curr_state[t][2*s+1], s);
       }
     }
     update_statistics_ising();
@@ -711,7 +725,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     #pragma omp parallel for private(s) 
     for(int t = 0; t < params->num_threads; t++) {
       for(s = 0; s < params->Nmc_starts/2; s++) { 
-        mc_chain(mstat->curr_state[t][2*s],mstat->curr_state[t][2*s+1]);
+        mc_chain(mstat->curr_state[t][2*s],mstat->curr_state[t][2*s+1], s);
       }
     }
     update_statistics();
@@ -764,7 +778,6 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     for(int ind = 0; ind < int(mstat->tm_s.size()); ind++) 
       mstat->tm_s[ind] = 0;
     for(int i = 0; i < params->num_threads;i++) {
-      mstat->synth_msa[i].clear();
       for(int j = 0; j < int(mstat->qs_t[i].size()); j++)
         mstat->qs_t[i][j] = 0;
     }
