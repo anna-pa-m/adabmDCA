@@ -58,6 +58,10 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     }
     mstat->curr_state.clear();
     mstat->curr_state.resize(params->num_threads);
+    for(int i = 0; i<params->num_threads;i++) {
+      mstat->curr_state[i].clear();
+      mstat->curr_state[i].resize(params->Nmc_starts, vector <unsigned char> (L));
+    }
     mstat->qs_t.clear();
     mstat->qs_t.resize(params->num_threads, vector<int>(6));
     mstat->old_state1.clear();
@@ -79,13 +83,12 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
   void Model::init_current_state(vector< vector<unsigned char> > & msa) {
     
     for(int t = 0; t < params->num_threads; t++) {
-      mstat->curr_state[t].clear();
       if (!params->initdata) {
         vector<unsigned char> tmp(L);
         for(int s = 0; s < params->Nmc_starts; s++) {
 	        for(int i = 0; i < L; i++) 
 	          tmp[i] = (unsigned char)(int)rand() % q;
-	        mstat->curr_state[t].push_back(tmp);
+	        mstat->curr_state[t][s] = tmp;
         }
       } else {
         if (int(msa.size()) == 0) {
@@ -94,7 +97,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
         } else {
 	        for(int s = 0; s < params->Nmc_starts; s++) {
 	          int i = (int)rand() % int(msa.size());
-	            mstat->curr_state[t].push_back(msa[i]);
+	            mstat->curr_state[t][s] = msa[i];
 	        }
         }
       }
@@ -105,14 +108,13 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
 
 
     for(int t = 0; t < params->num_threads; t++) {
-      mstat->curr_state[t].clear();
       if (!params->initdata) {
         vector<unsigned char> tmp(L);
         for(int s = 0; s < params->Nmc_starts; s++) {
 	        for(int i = 0; i < L; i++) {
 	          tmp[i] = (unsigned char)(rand01() > 0.5) ? 1 : 0;
 	        }
-	        mstat->curr_state[t].push_back(tmp);
+	        mstat->curr_state[t][s] = tmp;
         }
       } else {
         if (int(msa.size()) == 0) {
@@ -121,7 +123,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
         } else {
 	        for(int s = 0; s < params->Nmc_starts; s++) {
 	          int i = (int)rand() % int(msa.size());
-	            mstat->curr_state[t].push_back(msa[i]);
+	            mstat->curr_state[t][s] = msa[i];
 	        }
         }
       }
