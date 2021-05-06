@@ -26,8 +26,7 @@ Params::Params() {
     ctype = 'a';
     file_3points =0;
     file_cc = 0;
-    file_samples = 0;
-    file_en=0;
+	print_samples = false;
     Metropolis = true;
     Gibbs = false;
     rmgauge = false;
@@ -70,7 +69,7 @@ Params::Params() {
 
   int Params::read_params (int & argc, char ** argv) {
     int c;
-    while ((c = getopt(argc, argv, "a:b:c:d:e:f:g:hi:j:k:l:m:n:o:p:q:r:s:t:u:v:w:x:y:z:ABC:DE:FGHIJ:KLMNO:PQRS:T:UVWX:")) != -1) {
+    while ((c = getopt(argc, argv, "a:b:c:d:e:f:g:hi:j:k:l:m:n:o:p:q:r:s:t:u:v:w:x:y:z:ABC:DFGHIJ:KLMNO:PQRST:UVWX:")) != -1) {
 		switch (c) {
 			case 'O':
 				num_threads = atoi(optarg);
@@ -110,10 +109,7 @@ Params::Params() {
 				dec_f = false;
 				break;
 			case 'S':
-				file_samples = optarg;
-				break;
-			case 'E':
-				file_en = optarg;
+				print_samples = true;
 				break;
 			case 'H':
 				phmm = true;
@@ -374,30 +370,33 @@ Params::Params() {
 
   }
 
-  void Params::construct_filenames(int iter, bool conv, char * par, char * par_zsum, char * score, char * first, char * sec, char * third) {
+  void Params::construct_filenames(int iter, bool conv, char * par, char * par_zsum, char * ene, char * score, char * first, char * sec, char * third) {
       if (!conv) {
-	if (overwrite) {
-	  sprintf(par, "Parameters_tmp_%s.dat", label);
-	  sprintf(par_zsum, "Parameters_tmp_zerosum_%s.dat", label);
-	  sprintf(score, "Score_tmp_%s.dat", label);
-	  sprintf(first, "First_mom_tmp_%s.dat", label);
-	  sprintf(sec, "Sec_mom_tmp_%s.dat", label);
-	  sprintf(third, "Third_mom_tmp_%s.dat", label);
-	} else {
-	  sprintf(par, "Parameters_tmp_%d_%s.dat", iter, label);
-	  sprintf(par_zsum, "Parameters_tmp_%d_zerosum_%s.dat", iter, label);
-	  sprintf(score, "Score_tmp_%d_%s.dat", iter, label);
-	  sprintf(first, "First_mom_tmp_%d_%s.dat", iter, label);
-	  sprintf(sec, "Sec_mom_tmp_%d_%s.dat", iter, label);
-	  sprintf(third, "Third_mom_tmp_%d_%s.dat", iter, label);
-	}
-      } else {
-	sprintf(par, "Parameters_conv_%s.dat", label);
-	sprintf(par_zsum, "Parameters_conv_zerosum_%s.dat", label);
-	sprintf(score, "Score_%s.dat",label);
-	sprintf(first, "First_mom_conv_%s.dat", label);
-	sprintf(sec, "Sec_mom_conv_%s.dat", label);
-	sprintf(third, "Third_order_connected_corr_%s.dat", label);
+		if (overwrite) {
+	  		sprintf(par, "Parameters_tmp_%s.dat", label);
+	  		sprintf(par_zsum, "Parameters_tmp_zerosum_%s.dat", label);
+	  		sprintf(ene, "Sample_tmp_%s.dat", label);
+	  		sprintf(score, "Score_tmp_%s.dat", label);
+	  		sprintf(first, "First_mom_tmp_%s.dat", label);
+	  		sprintf(sec, "Sec_mom_tmp_%s.dat", label);
+	  		sprintf(third, "Third_mom_tmp_%s.dat", label);
+		} else {
+	  		sprintf(par, "Parameters_tmp_%d_%s.dat", iter, label);
+	  		sprintf(par_zsum, "Parameters_tmp_%d_zerosum_%s.dat", iter, label);
+	  		sprintf(ene, "Sample_tmp_%d_%s.dat", iter, label);
+	  		sprintf(score, "Score_tmp_%d_%s.dat", iter, label);
+	  		sprintf(first, "First_mom_tmp_%d_%s.dat", iter, label);
+	  		sprintf(sec, "Sec_mom_tmp_%d_%s.dat", iter, label);
+	 		sprintf(third, "Third_mom_tmp_%d_%s.dat", iter, label);
+		}
+     } else {
+		sprintf(par, "Parameters_conv_%s.dat", label);
+		sprintf(par_zsum, "Parameters_conv_zerosum_%s.dat", label);
+		sprintf(ene, "Sample_conv_%s.dat",  label);
+		sprintf(score, "Score_%s.dat",label);
+		sprintf(first, "First_mom_conv_%s.dat", label);
+		sprintf(sec, "Sec_mom_conv_%s.dat", label);
+		sprintf(third, "Third_order_connected_corr_%s.dat", label);
       }
   }
   

@@ -71,6 +71,7 @@ class Model {
   void update_synth_msa(vector<unsigned char> & x1, vector<unsigned char> & x2);
   void init_model_stat(int ntm);
   void init_current_state(vector< vector<unsigned char> > & msa);
+  void init_current_state_ising(vector< vector<unsigned char> > & msa);
   int remove_gauge_freedom(vector< vector<float> > & cov);
   int initialize_parameters(vector<float> & fm);
   void initial_decimation(vector< vector<float> > & cov);
@@ -79,14 +80,20 @@ class Model {
   double DCA_energy(vector<unsigned char> & seq);
   double energy(vector<unsigned char> & seq);
   void metropolis_step(vector<unsigned char> & x);
+  void metropolis_step_ising(vector<unsigned char> & x);
   void gibbs_step(vector<unsigned char> & x);
+  void gibbs_step_ising(vector<unsigned char> & x);
   void MC_sweep(vector<unsigned char> & x);
+  void MC_sweep_ising(vector<unsigned char> & x);
+  void mc_chain_ising(vector<unsigned char> & x1, vector<unsigned char> & x2);
   void mc_chain(vector<unsigned char> & x1, vector<unsigned char> & x2);
   void update_overlap(vector <int> & qs);
   void update_corr(int i, int value);
   bool sample(vector< vector<unsigned char> > & msa);
+  bool sample_ising(vector< vector<unsigned char> > & msa);
   void init_statistics();
   void update_statistics();
+  void update_statistics_ising();
   void update_statistics_lock(vector<unsigned char> & x, FILE * fp, FILE * fe);
   void update_tm_statistics(vector<unsigned char> & x);
   void compute_third_order_correlations();
@@ -96,6 +103,8 @@ class Model {
   int n_links();
   void init_decimation_variables();
   int decimate_compwise(int c, int iter);
+  void print_samples(char * filename);
+  void print_samples_ising(char * filename);
 
 
 };
