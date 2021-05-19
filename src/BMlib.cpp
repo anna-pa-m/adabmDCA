@@ -91,6 +91,9 @@ Params::Params() {
 				break;
 			case 'B':
 				blockwise = true;
+				dec_f = false;
+				dec_J = false;
+				dec_sdkl = true;
 				break;
 			case 'W':
 				compwise = true;
@@ -260,7 +263,7 @@ Params::Params() {
 				cout << "### Sparse Potts model ###" << endl;
 				cout << "-x : (number) Required sparsity. Add -B for block-wise decimation or -W for component-wise decimation. Default: 1.0" << endl;
 				cout << "-X : (number) Decimate every x steps even if not converged, default: infinite" << endl;
-				cout << "-B : (flag) A block-wise decimation is applied to the couplings (currently not implemented). Default: false" << endl;
+				cout << "-B : (flag) A block-wise decimation is applied to the couplings using the symKL. Default: false" << endl;
 				cout << "-W : (flag) A component-wise decimation is applied to the couplings using the symKL. Default: false" << endl << "\tadd -U (flag) to use frequencies instead" << endl << "\tadd -V (flag) to use couplings instead" << endl;
 				cout << "### Other max-ent models ###" << endl;
 				cout << "-D : (flag) DGap model: Only the first moments of the gap statistics are fitted" << endl;
@@ -334,32 +337,37 @@ Params::Params() {
     }
     if(sparsity > 0.0) {
       if (regJ1 != 0.0 || regJ2 != 0.0) {
-	cout << "Regularization is not compatible with sparsification because of gauge choice conflicts" << endl;
-	exit(1);
+		cout << "Regularization is not compatible with sparsification because of gauge choice conflicts" << endl;
+		exit(1);
       }
       cout << "Required sparsity " << sparsity;
       if (!compwise && !blockwise) {
-	cerr << endl << "Please use either -W or -B flags to specify decimation type. EXIT" << endl;
-	exit(EXIT_FAILURE);
+		cerr << endl << "Please use either -W or -B flags to specify decimation type. EXIT" << endl;
+		exit(EXIT_FAILURE);
       } else if(compwise && !blockwise) {
-	cout << " using (component-wise) ";
-	if(dec_sdkl)
-		cout << "Kullback-Leibler based decimation" << endl;
-	if(dec_f)
-		cout << "second moments based decimation" << endl;
-	if(dec_J)
-		cout << "couplings based decimation" << endl;
+			cout << " using (component-wise) ";
+			if(dec_sdkl)
+				cout << "Kullback-Leibler based decimation" ;
+			if(dec_f)
+				cout << "second moments based decimation" ;
+			if(dec_J)
+				cout << "couplings based decimation" ;
       } else if (!compwise && blockwise) {
-	cout << " using (block-wise) Kullback-Leibler based decimation -- NOT YET IMPLEMENTED. EXIT";
-	exit(EXIT_FAILURE);
+			cout << " using (block-wise) ";
+			if(dec_sdkl)
+				cout << "Kullback-Leibler based decimation" ;
+			if(dec_f)
+				cout << "second moments based decimation (this is equivalent to a random choice!)" ;
+			if(dec_J)
+				cout << "couplings based decimation" ;
       } else if (compwise && blockwise) {
-	cout << endl << "Please do not use -W and -B flags together! EXIT" << endl;
-	exit(EXIT_FAILURE);
+			cout << endl << "Please do not use -W and -B flags together! EXIT" << endl;
+			exit(EXIT_FAILURE);
       }
       if (dec_steps==INT_MAX)
-	cout << " at convergence" << endl;
+		cout << " at convergence" << endl;
       else
-	cout << " every at most "  << dec_steps << " steps" << endl;
+		cout << " every at most "  << dec_steps << " steps" << endl;
     }
     if(regJ1 > 0)
       cout << "L1 regularization on couplings: lambda " << regJ1 << endl;
