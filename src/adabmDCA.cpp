@@ -45,6 +45,7 @@ int main(int argc, char **argv)
   char first[1000];
   char sec[1000];
   char third[1000];
+  char corr[1000];
   int iter = 0;
   int in_time = omp_get_wtime();
   bool conv = (params.maxiter > 0) ? false : true;
@@ -70,24 +71,24 @@ int main(int argc, char **argv)
       fflush(stdout);
     }
     if (iter > 0 && (iter % params.nprintfile == 0)) {
-      params.construct_filenames(iter, conv, par, par_zsum, ene, score, first, sec, third);
+      params.construct_filenames(iter, conv, par, par_zsum, ene, corr, score, first, sec, third);
       print_frobenius_norms(model.h, model.J, model.L, model.q, score, par_zsum);
       model.print_model(par);
       if(params.print_samples) 
         model.print_samples(ene);
       if (data.tm.size() > 0)
         model.compute_third_order_correlations();
-      data.print_statistics(sec, first, third, model.mstat->fm_s, model.mstat->sm_s, model.mstat->tm_s);
+      data.print_statistics(sec, first, third, corr, model.mstat->corr, model.mstat->fm_s, model.mstat->sm_s, model.mstat->tm_s);
     }
     lrav = model.update_parameters(data.fm, data.sm, iter);
     if (iter > 0 && params.compwise && (errs.errnorm < params.conv || iter % params.dec_steps == 0)) {
       // Print converged parameters before decimation
-      params.construct_filenames(iter, conv, par, par_zsum, ene, score, first, sec, third);
+      params.construct_filenames(iter, conv, par, par_zsum, ene, corr, score, first, sec, third);
       print_frobenius_norms(model.h, model.J, model.L, model.q, score, par_zsum);
       model.print_model(par);
       if (data.tm.size() > 0)
         model.compute_third_order_correlations();
-      data.print_statistics(sec, first, third, model.mstat->fm_s, model.mstat->sm_s, model.mstat->tm_s);
+      data.print_statistics(sec, first, third, corr, model.mstat->corr, model.mstat->fm_s, model.mstat->sm_s, model.mstat->tm_s);
       // Then decimate
       int aux = ceil(model.n_links() / 100);
       model.decimate_compwise(aux, iter);
@@ -131,12 +132,12 @@ int main(int argc, char **argv)
     model.sample(data.msa);
   }
 
-  params.construct_filenames(iter, conv, par, par_zsum, ene, score, first, sec, third);
+  params.construct_filenames(iter, conv, par, par_zsum, ene,  corr, score, first, sec, third);
   print_frobenius_norms(model.h, model.J, model.L, model.q, score, par_zsum);
   model.print_model(par);
   if (data.tm.size() > 0)
     model.compute_third_order_correlations();
-  data.print_statistics(sec, first, third, model.mstat->fm_s, model.mstat->sm_s, model.mstat->tm_s);
+  data.print_statistics(sec, first, third, corr, model.mstat->corr, model.mstat->fm_s, model.mstat->sm_s, model.mstat->tm_s);
   cout << "****** Execution completed ******" << endl;
 
   fflush(stdout);

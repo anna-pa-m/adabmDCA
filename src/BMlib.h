@@ -9,8 +9,10 @@
 #include <string.h>
 #include <getopt.h>
 #include <stdbool.h>
+#include <valarray>
 #include <iostream>
 #include "BMaux.h"
+
 
 using namespace std;
 
@@ -29,7 +31,7 @@ class Params {
 
   int read_params (int & argc, char ** argv);
   void print_learning_strategy();
-  void construct_filenames(int iter, bool conv, char * par, char * par_zsum, char * ene, char * score, char * first, char * sec, char * third);
+  void construct_filenames(int iter, bool conv, char * par, char * par_zsum, char * ene, char * corr, char * score, char * first, char * sec, char * third);
 };
 
 class Data {
@@ -60,7 +62,7 @@ class Data {
   /******************** METHODS FOR OUTPUT ***********************************************************/
   
   void print_msa(char *filename);
-  int print_statistics(char *file_sm, char *file_fm, char *file_tm, vector<float> & fm_s, vector< vector<float> > & sm_s, vector<float> & tm_s); 
+  int print_statistics(char *file_sm, char *file_fm, char *file_tm, char *file_c, valarray<float> & corr, vector<float> & fm_s, vector< vector<float> > & sm_s, vector<float> & tm_s); 
    
 };
 

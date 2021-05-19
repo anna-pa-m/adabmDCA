@@ -13,6 +13,7 @@
 #include <fstream>
 #include <vector>
 #include <valarray>
+#include <omp.h>
 #include "BMlib.h"
 
 using namespace std;

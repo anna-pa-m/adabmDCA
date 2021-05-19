@@ -677,9 +677,6 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     }
     update_statistics_ising();
     mstat->corr /= params->Nmc_starts;
-    char filename_aux[1000];
-    sprintf(filename_aux, "corr_%s.dat", params->label);
-    ofstream fileout;
     double nse=params->Nmc_config*(params->Nmc_starts/2);
     double qext=mstat->qs[0]/nse;
     double dqext=sqrt(mstat->qs[1]/(nse-1)-mstat->qs[0]*mstat->qs[0]/nse/(nse-1))/sqrt(nse);
@@ -703,10 +700,6 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
       }
     }
 
-    fileout.open(filename_aux);
-    for (int i=0;i<int(mstat->corr.size());i++) 
-      fileout <<  i << " " << mstat->corr[i] << endl;
-    fileout.close();
     if(params->nprinteq)
       cout<<"Sampling info: q_ext: "<<qext<<" +- "<<dqext<<" q_int_1: "<<qin1<<" +- "<<dqin1<<" q_int_2: "<<qin2<<" +- "<<dqin2<<" Test_eq1: "<<test1<<" Test_eq2: "<<test2<<endl;
     return eqmc;
@@ -732,9 +725,6 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     }
     update_statistics();
     mstat->corr /= params->Nmc_starts;
-    char filename_aux[1000];
-    sprintf(filename_aux, "corr_%s.dat", params->label);
-    ofstream fileout;
     double nse=params->Nmc_config*(params->Nmc_starts/2);
     double qext=mstat->qs[0]/nse;
     double dqext=sqrt(mstat->qs[1]/(nse-1)-mstat->qs[0]*mstat->qs[0]/nse/(nse-1))/sqrt(nse);
@@ -758,10 +748,6 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
       }
     }
 
-    fileout.open(filename_aux);
-    for (int i=0;i<int(mstat->corr.size());i++) 
-      fileout <<  i << " " << mstat->corr[i] << endl;
-    fileout.close();
     if(params->nprinteq)
       cout<<"Sampling info: q_ext: "<<qext<<" +- "<<dqext<<" q_int_1: "<<qin1<<" +- "<<dqin1<<" q_int_2: "<<qin2<<" +- "<<dqin2<<" Test_eq1: "<<test1<<" Test_eq2: "<<test2<<endl;
     return eqmc;
@@ -1047,6 +1033,10 @@ int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vect
           }
           else if (params->learn_strat == 3)
             lrh /= (1.0 + (double)iter / params->tau);
+          else if (params->learn_strat == 4) {
+            lrh /= fm[i*q+a]*(1.0-fm[i*q+a]);
+            //lrh /= (params->maxiter - iter);
+          }
           h[i * q + a] += lrh * gradh;
           lrav += lrh;
           n++;
@@ -1065,6 +1055,10 @@ int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vect
               }
               else if (params->learn_strat == 3)
                 lrJ /= (1.0 + (double)iter / params->tau);
+              else if (params->learn_strat == 4) {
+                lrJ /= sm[i*q+a][j*q+b]*(1.0-sm[i*q+a][j*q+b]);
+                //lrJ /= (params->maxiter - iter);
+              }
               J[i * q + a][j * q + b] += lrJ * decJ[i * q + a][j * q + b] * gradJ;
               J[j * q + b][i * q + a] = J[i * q + a][j * q + b];
               lrav += lrJ;

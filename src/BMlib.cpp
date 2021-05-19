@@ -10,8 +10,10 @@
 #include <getopt.h>
 #include <stdbool.h>
 #include <iostream>
+#include <valarray>
 #include "BMaux.h"
 #include "BMlib.h"
+#include "BMmc.h"
 using namespace std;
 
 
@@ -150,8 +152,8 @@ Params::Params() {
 			case 'p':
 				file_params = optarg;
 				break;
-    		        case 'J':
-		                beta = atof(optarg);
+    		case 'J':
+		        beta = atof(optarg);
 				break;
 			case 'e':
 				Teq = atoi(optarg);
@@ -256,7 +258,7 @@ Params::Params() {
 				cout << "-L : (flag) Do not adapt Teq and Twait to achieve equilibration" << endl;
 				cout << "-u : (number) Learning rate for couplings, default: " << lrateJ << endl;
 				cout << "-v : (number) Learning rate for fields, default: " << lrateh << endl;
-				cout << "-a : (number) Learning strategy." << endl << "\t0: standard gradient descent" << endl << "\t1: adagrad" << endl << "\t2. RMSprop" << endl << "\t3. search then converge" << endl << "\t4. adam (currently not implemented)" << endl << "\t5. FIRE" << endl << "\tDefault: " << learn_strat << endl;
+				cout << "-a : (number) Learning strategy." << endl << "\t0: standard gradient descent" << endl << "\t1: adagrad" << endl << "\t2. RMSprop" << endl << "\t3. search then converge" << endl << "\t4. pseudo-Newton" << endl << "\t5. FIRE" << endl << "\tDefault: " << learn_strat << endl;
 				cout << "### Sparse Potts model ###" << endl;
 				cout << "-x : (number) Required sparsity. Add -B for block-wise decimation or -W for component-wise decimation. Default: 1.0" << endl;
 				cout << "-X : (number) Decimate every x steps even if not converged, default: infinite" << endl;
@@ -313,7 +315,7 @@ Params::Params() {
     cout << "Learning strategy: " << endl;
     switch(learn_strat) {
     case 0:
-      cout << "Using standard gradient descent with constant learning rate (for J " << lrateJ << " for h " << lrateh << " )" << endl;
+      cout << "Using standard gradient descent with constant learning rate (for J " << lrateJ << " for h " << lrateh << ")" << endl;
       break;
     case 1:
       cout << "Using adagrad" << endl;
@@ -325,8 +327,7 @@ Params::Params() {
       cout << "Using search and converge with decay time " << tau << " and learning rate (for J " << lrateJ << ", for h " << lrateh << endl;
       break;
     case 4:
-      cout << "Using adam : NOT YET IMPLEMENTED, EXIT" << endl;
-      exit(EXIT_FAILURE);
+      cout << "Using pseudo-Newton " << endl;
       break;
     case 5:
       cout << "Using FIRE" << endl;
@@ -370,9 +371,10 @@ Params::Params() {
 
   }
 
-  void Params::construct_filenames(int iter, bool conv, char * par, char * par_zsum, char * ene, char * score, char * first, char * sec, char * third) {
+  void Params::construct_filenames(int iter, bool conv, char * par, char * par_zsum, char * ene, char * corr, char * score, char * first, char * sec, char * third) {
       if (!conv) {
 		if (overwrite) {
+			sprintf(corr, "Corr_tmp_%s.dat", label);
 	  		sprintf(par, "Parameters_tmp_%s.dat", label);
 	  		sprintf(par_zsum, "Parameters_tmp_zerosum_%s.dat", label);
 	  		sprintf(ene, "Sample_tmp_%s.dat", label);
@@ -381,6 +383,7 @@ Params::Params() {
 	  		sprintf(sec, "Sec_mom_tmp_%s.dat", label);
 	  		sprintf(third, "Third_mom_tmp_%s.dat", label);
 		} else {
+			sprintf(corr, "Corr_tmp_%d_%s.dat", iter, label);
 	  		sprintf(par, "Parameters_tmp_%d_%s.dat", iter, label);
 	  		sprintf(par_zsum, "Parameters_tmp_%d_zerosum_%s.dat", iter, label);
 	  		sprintf(ene, "Sample_tmp_%d_%s.dat", iter, label);
@@ -390,6 +393,7 @@ Params::Params() {
 	 		sprintf(third, "Third_mom_tmp_%d_%s.dat", iter, label);
 		}
      } else {
+        sprintf(corr, "Corr_conv_%s.dat",label);
 		sprintf(par, "Parameters_conv_%s.dat", label);
 		sprintf(par_zsum, "Parameters_conv_zerosum_%s.dat", label);
 		sprintf(ene, "Sample_conv_%s.dat",  label);
@@ -729,12 +733,17 @@ Data::Data(Params * _params):
     fp.close();
   }
 
-  int Data::print_statistics(char *file_sm, char *file_fm, char *file_tm, vector<float> & fm_s, vector< vector<float> > & sm_s, vector<float> & tm_s) {
+  int Data::print_statistics(char *file_sm, char *file_fm, char *file_tm, char * file_c, valarray<float> & corr, vector<float> & fm_s, vector< vector<float> > & sm_s, vector<float> & tm_s) {
     ofstream fs;
     ofstream ff;
     ofstream ft;
+	ofstream fc;
     fs.open(file_sm);
     ff.open(file_fm);
+    fc.open(file_c);
+    for (int i=0;i<int(corr.size());i++) 
+      fc <<  i << " " << corr[i] << endl;
+    fc.close();
     if(params->ctype == 'i') {
       for(int i = 0; i <L; i++) {
 	for(int j= i+1; j < L; j++)
