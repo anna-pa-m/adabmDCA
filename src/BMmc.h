@@ -104,6 +104,7 @@ class Model {
   int n_links();
   void init_decimation_variables();
   int decimate_compwise(int c, int iter);
+  int decimate_blockwise(int iter);
   void print_samples(char * filename);
   void print_samples_ising(char * filename);
 

@@ -1132,10 +1132,10 @@ int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vect
   }
 
   void Model::init_decimation_variables() {
-    if(params->sparsity > 0 || params->compwise || params->blockwise) {
-      int n = L*(L-1)*q*q/2;
+    if(params->sparsity > 0 && params->compwise ) {
       idx.clear();
       vector<int> tmp(4,0);
+      int n = L*(L-1)*q*q/2;
       idx.resize(n,tmp);
       sorted_struct.clear();
       sorted_struct.resize(n,0);
@@ -1143,22 +1143,111 @@ int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vect
       tmp_idx.resize(n,0);
       int k = 0;
       for(int i = 0; i < L; i++) {
-	for(int j = i+1; j < L; j++) {
-	  for(int a = 0; a < q; a++) {
-	    for(int b = 0; b < q; b++) {
-	      idx[k][0] = i;
-	      idx[k][1] = j;
-	      idx[k][2] = a;
-	      idx[k][3] = b;
-	      sorted_struct[k] = 0.0;
-	      k += 1;
-	    }
+	      for(int j = i+1; j < L; j++) {
+	        for(int a = 0; a < q; a++) {
+	          for(int b = 0; b < q; b++) {
+	            idx[k][0] = i;
+	            idx[k][1] = j;
+	            idx[k][2] = a;
+	            idx[k][3] = b;
+	            sorted_struct[k] = 0.0;
+	            k += 1;
+	          }
+	        }
+	      }
+      } 
+    }else if (params->blockwise && params->sparsity > 0) {
+        int n = L*(L-1)/2;
+        vector<int> tmp(2,0);
+        idx.resize(n,tmp);
+        sorted_struct.clear();
+        sorted_struct.resize(n,0);
+        tmp_idx.clear();
+        tmp_idx.resize(n,0);
+        int k = 0;
+        for(int i = 0; i < L; i++) {
+	       for(int j = i+1; j < L; j++) {
+	          idx[k][0] = i;
+	          idx[k][1] = j;
+	          sorted_struct[k] = 0.0;
+	          k += 1;
+	        }
+	      }
 	  }
-	}
-      }
-    }
   }
   
+  int Model::decimate_blockwise(int iter) {
+    int i, j, a, b, index, m = 0;
+    double smalln = min(1e-30, params->pseudocount * 0.03);
+    double maxsdkl = -1e50;
+    int sumJ;
+    cout << "Decimating one block" << endl;
+    for(int k = 0; k < int(tmp_idx.size()); k++) {
+      tmp_idx[k] = k;
+      i = idx[k][0];
+      j = idx[k][1];
+      sumJ = 0;
+      for(a = 0; a < q; a++) {
+        for(b = 0; b < q; b++)
+          sumJ += decJ[i*q+a][j*q+b];
+      }
+      if(sumJ > 0) {
+	      m += 1;
+	      if(params->dec_sdkl) {
+	        double auxsm = smalln * rand01() + mstat->sm_s[i*q+a][j*q+b];
+          double term0 = 0.0;
+          double num = 0.0;
+          double den = 0.0;
+          for(a = 0; a < q; a++) {
+            for(b = 0; b < q; b++){
+                term0 += J[i*q+a][j*q+b]*auxsm;
+                num += J[i*q+a][j*q+b]*auxsm*exp(-J[i*q+a][j*q+b]);
+                den += auxsm * exp(-J[i*q+a][j*q+b]);
+            }
+          }
+	        sorted_struct[k] = term0 - num/den;
+	        sorted_struct[k] += rand01() * smalln;
+	      } else if(params->dec_f) {
+          for(a = 0; a < q; a++) {
+            for(b = 0; b < q; b++){
+	            sorted_struct[k] += smalln * rand01() + fabs(mstat->sm_s[i*q+a][j*q+b]);
+            }
+          }
+	      } else if(params->dec_J) {
+          for(a = 0; a < q; a++) {
+            for(b = 0; b < q; b++){
+	            sorted_struct[k] += smalln * rand01() + fabs(J[i*q+a][j*q+b]);
+            }
+          }
+	      }
+	      maxsdkl = max(maxsdkl, sorted_struct[k]); 
+      } else {
+	      double f = rand01();
+	      sorted_struct[k] =  int(tmp_idx.size()) + f; // to be optimized: elements should be removed instead of putting large numbers
+      }
+    }
+    cout << "Non-zeros blocks before decimation " << m << endl;
+    quicksort(sorted_struct, tmp_idx, 0, int(tmp_idx.size())-1);
+
+      index = tmp_idx[0]; // take the one with smallest sDKL/sumof J / sumof sm
+      i = idx[index][0];
+      j = idx[index][1];
+      for(a = 0; a <q; a++){
+        for(b= 0; b <q; b++) {
+          J[i*q+a][j*q+b] = 0.0;
+          J[j*q+b][i*q+a] = 0.0;
+          decJ[i*q+a][j*q+b] = 0;
+          decJ[j*q+b][i*q+a] = 0;
+        }
+      }
+    
+    index = tmp_idx[0];
+    cout << "The sDKL associated with the removed block is " <<  sorted_struct[0] << " (i: " << idx[index][0] << " j: " << idx[index][1] << ")" << endl;
+    double nref=(L*(L-1)*q*q)/2;
+    model_sp+=(q*q)/nref;
+    cout << "Sparsity after decimation is " <<  model_sp << endl;
+    return 0;
+  }
   int Model::decimate_compwise(int c, int iter) {
     int i, j, a, b, index, m = 0;
     double smalln = min(1e-30, params->pseudocount * 0.03);
@@ -1171,20 +1260,20 @@ int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vect
       a = idx[k][2];
       b = idx[k][3];
       if(decJ[i*q + a][j*q + b] > 0) {
-	m += 1;
-	if(params->dec_sdkl) {
-	  double auxsm = smalln * rand01() + mstat->sm_s[i*q+a][j*q+b];
-	  sorted_struct[k] = J[i*q+a][j*q+b]*auxsm - (J[i*q+a][j*q+b]*exp(-J[i*q+a][j*q+b])*auxsm)/(exp(-J[i*q+a][j*q+b])*auxsm+1-auxsm);
-	  sorted_struct[k] += rand01() * smalln;
-	} else if(params->dec_f) {
-	  sorted_struct[k] = smalln * rand01() + fabs(mstat->sm_s[i*q+a][j*q+b]);
-	} else if(params->dec_J) {
-	  sorted_struct[k] = smalln * rand01() + fabs(J[i*q+a][j*q+b]);
-	}
-	maxsdkl = max(maxsdkl, sorted_struct[k]); 
+	      m += 1;
+	      if(params->dec_sdkl) {
+	        double auxsm = smalln * rand01() + mstat->sm_s[i*q+a][j*q+b];
+	        sorted_struct[k] = J[i*q+a][j*q+b]*auxsm - (J[i*q+a][j*q+b]*exp(-J[i*q+a][j*q+b])*auxsm)/(exp(-J[i*q+a][j*q+b])*auxsm+1-auxsm);
+	        sorted_struct[k] += rand01() * smalln;
+	      } else if(params->dec_f) {
+	        sorted_struct[k] = smalln * rand01() + fabs(mstat->sm_s[i*q+a][j*q+b]);
+	      } else if(params->dec_J) {
+	        sorted_struct[k] = smalln * rand01() + fabs(J[i*q+a][j*q+b]);
+	      }
+	      maxsdkl = max(maxsdkl, sorted_struct[k]); 
       } else {
-	double f = rand01();
-	sorted_struct[k] =  int(tmp_idx.size()) + f; // to be optimized: elements should be removed instead of putting large numbers
+	      double f = rand01();
+	      sorted_struct[k] =  int(tmp_idx.size()) + f; // to be optimized: elements should be removed instead of putting large numbers
       }
     }
     cout << "Non-zeros parameters before decimation " << m << endl;
@@ -1196,11 +1285,11 @@ int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vect
       a = idx[index][2];
       b = idx[index][3];
       if(decJ[i*q+a][j*q+b] == 0)
-	cerr << "Error: coupling " << i << " " << j << " " << a << " " << b << "was already decimated" << endl; 
-      J[i*q+a][j*q+b] = 0.0;
-      J[j*q+b][i*q+a] = 0.0;
-      decJ[i*q+a][j*q+b] = 0;
-      decJ[j*q+b][i*q+a] = 0;
+	      cerr << "Error: coupling " << i << " " << j << " " << a << " " << b << "was already decimated" << endl; 
+        J[i*q+a][j*q+b] = 0.0;
+        J[j*q+b][i*q+a] = 0.0;
+        decJ[i*q+a][j*q+b] = 0;
+        decJ[j*q+b][i*q+a] = 0;
     }
     index = tmp_idx[c];
     cout << "Smallest sDKL associated with the first kept coupling is " <<  sorted_struct[c] << " (i: " << idx[index][0] << " j: " << idx[index][1] << " a: " << idx[index][2] << " b: " << idx[index][3] << " )" << endl;
