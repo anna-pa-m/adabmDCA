@@ -834,7 +834,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
         fprintf(fp, ">THREAD%d_CHAIN%d_SAMPLE%d h_en %lf J_en %lf \n", t,
           m/params->Nmc_config, m%params->Nmc_config, prof_energy(x), DCA_energy(x));
         for(int i = 0; i<L;i++) 
-          fprintf(fp, "%c", x[i]);
+          fprintf(fp, "%d", x[i]);
         fprintf(fp, "\n");
       }
     }

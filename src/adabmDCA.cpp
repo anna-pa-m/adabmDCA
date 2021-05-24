@@ -128,8 +128,6 @@ int main(int argc, char **argv)
       cout << " merr_fm: " << errs.merrh << " merr_sm: " << errs.merrJ << " averr_fm: " << errs.averrh << " averr_sm: " << errs.averrJ << " cov_err: " << errs.errnorm;
       cout.unsetf(ios::scientific);
       cout << " corr: " << model.pearson(data.cov) << endl;
-      if(params.print_samples) 
-        model.print_samples(ene);
       fflush(stdout);
     }
   }
@@ -143,6 +141,12 @@ int main(int argc, char **argv)
   if (data.tm.size() > 0)
     model.compute_third_order_correlations();
   data.print_statistics(sec, first, third, corr, model.mstat->corr, model.mstat->fm_s, model.mstat->sm_s, model.mstat->tm_s);
+  if(params.print_samples) {
+    if(params.ctype == 'i')
+      model.print_samples_ising(ene);
+    else
+      model.print_samples(ene);
+  }
   cout << "****** Execution completed ******" << endl;
 
   fflush(stdout);
