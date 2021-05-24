@@ -128,6 +128,8 @@ int main(int argc, char **argv)
       cout << " merr_fm: " << errs.merrh << " merr_sm: " << errs.merrJ << " averr_fm: " << errs.averrh << " averr_sm: " << errs.averrJ << " cov_err: " << errs.errnorm;
       cout.unsetf(ios::scientific);
       cout << " corr: " << model.pearson(data.cov) << endl;
+      if(params.print_samples) 
+        model.print_samples(ene);
       fflush(stdout);
     }
   }
