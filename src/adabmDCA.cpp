@@ -57,7 +57,10 @@ int main(int argc, char **argv)
     fflush(stdout);
   }
   while (!conv) {
-    model.sample(data.msa);
+    if(params.ctype == 'i')
+      model.sample_ising(data.msa);
+    else
+      model.sample(data.msa);
     model.compute_errors(data.fm, data.sm, data.cov, errs);
     if (iter % params.nprint == 0) {
       cout << setprecision(1);
@@ -118,9 +121,9 @@ int main(int argc, char **argv)
   if (!params.maxiter) {
     bool eqmc = false;
     while (!eqmc) {
-      if(params.ctype == 'i')
+      if(params.ctype == 'i'){
         eqmc = model.sample_ising(data.msa);
-      else
+      } else
         eqmc = model.sample(data.msa);
       model.compute_errors(data.fm, data.sm, data.cov, errs);
       cout << "N: " << params.Nmc_config * params.Nmc_starts * params.num_threads << " Teq: " << params.Teq << " Twait: " << params.Twait;
@@ -132,7 +135,10 @@ int main(int argc, char **argv)
     }
   }
   else {
-    model.sample(data.msa);
+    if(params.ctype == 'i'){
+      model.sample_ising(data.msa);
+    } else
+      model.sample(data.msa);
   }
 
   params.construct_filenames(iter, conv, par, par_zsum, ene,  corr, score, first, sec, third);
