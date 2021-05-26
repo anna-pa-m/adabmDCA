@@ -749,16 +749,17 @@ Data::Data(Params * _params):
     fs.open(file_sm);
     ff.open(file_fm);
     fc.open(file_c);
+	
     for (int i=0;i<int(corr.size());i++) 
       fc <<  i << " " << corr[i] << endl;
     fc.close();
     if(params->ctype == 'i') {
       for(int i = 0; i <L; i++) {
-	for(int j= i+1; j < L; j++)
-	  fs << i << " " << j << " " << sm[i][j] << " " << sm_s[i][j] << " " << cov[i][j] << " " << sm_s[i][j] - fm_s[i]*fm_s[j] << endl;
+		for(int j= i+1; j < L; j++)
+		  fs << i << " " << j << " " << sm[i][j] << " " << sm_s[i][j] << " " << cov[i][j] << " " << sm_s[i][j] - fm_s[i]*fm_s[j] << endl;
       }
       for(int i = 0; i < L; i++)
-	ff << i << " " << fm[i] << endl;
+		ff << i << " " << fm[i] <<  " " << fm_s[i] << endl;
       if(int(tm_index.size())>0) {
 	ft.open(file_tm);
 	int i, j, k;
@@ -781,8 +782,9 @@ Data::Data(Params * _params):
 	}
       }
       for(int i = 0; i < L; i++) {
-	for(int a = 0; a < q; a++)
+	for(int a = 0; a < q; a++){
 	  ff <<  i << " " << a << " " << fm[i*q+a] << " " << fm_s[i*q+a] << endl;
+	}
       }
       if(int(tm_index.size())>0) {
 	ft.open(file_tm);
