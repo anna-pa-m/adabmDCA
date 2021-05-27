@@ -13,7 +13,6 @@
 #include <fstream>
 #include <vector>
 #include <valarray>
-#include <omp.h>
 #include "BMlib.h"
 
 using namespace std;
@@ -45,7 +44,6 @@ struct Stats {
   valarray<float> corr;
   vector< vector < vector <unsigned char> > > synth_msa;
   vector< vector < vector <unsigned char> > > curr_state;
-  omp_lock_t lock;
 
 };
 

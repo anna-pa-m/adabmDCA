@@ -54,7 +54,7 @@ Params::Params() {
     lrateh = 5e-2;
     conv = 8e-3;
     pseudocount = 0;
-    beta = 1;
+    beta = 1.0;
     tau = 1000; // tau parameter for search and converge (learn_strat = 3)
     seed = 0;
     learn_strat = 0;
@@ -71,11 +71,8 @@ Params::Params() {
 
   int Params::read_params (int & argc, char ** argv) {
     int c;
-    while ((c = getopt(argc, argv, "a:b:c:d:e:f:g:hi:j:k:l:m:n:o:p:q:r:s:t:u:v:w:x:y:z:ABC:DFGHIJ:KLMNO:PQRST:UVWX:")) != -1) {
+    while ((c = getopt(argc, argv, "a:b:c:d:e:f:g:hi:j:k:l:m:n:o:p:q:r:s:t:u:v:w:x:y:z:ABC:DFGHIJ:KLMNPQRST:UVWX:")) != -1) {
 		switch (c) {
-			case 'O':
-				num_threads = atoi(optarg);
-				break;
 			case 'b':
 				ctype = optarg[0];
 				break;
@@ -302,8 +299,7 @@ Params::Params() {
     } else {
       cout << "Fixed sampling time: " << Twait << " fixed equilibration time: " << Teq << endl;
     }
-	cout << "Using " << num_threads << " threads" << endl;
-    cout << "Using " << Nmc_starts << " seeds for each thread and tot. number of points " << Nmc_starts * Nmc_config * num_threads << endl;
+    cout << "Using " << Nmc_starts << " seeds and tot. number of points " << Nmc_starts * Nmc_config * num_threads << endl;
     if (initdata) {
       cout << "MC chains are initialized using MSA sequences";
     } else {
@@ -431,7 +427,7 @@ Data::Data(Params * _params):
 
   void Data::read_msa() {
     char * filename=params->file_msa;
-    cout << "Reading MSA from" << params->file_msa << endl;
+    cout << "Reading MSA from " << params->file_msa << endl;
     FILE * filemsa;
     char ch;
     int readseq = 0, newseq = 0;
@@ -537,8 +533,6 @@ Data::Data(Params * _params):
     sm.resize(L*q,fm);
     cov.clear();
     cov.resize(L*q,fm);
-	//synth_msa.clear();
-	//synth_msa.resize(params->num_threads, msa);
   }
 
   void Data::compute_empirical_statistics() {

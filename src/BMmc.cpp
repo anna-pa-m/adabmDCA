@@ -9,7 +9,6 @@
 #include <string.h>
 #include <getopt.h>
 #include <stdbool.h>
-#include <omp.h>
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -76,7 +75,6 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     mstat->old_state2.resize(params->num_threads, vector<unsigned char>(L));
     mstat->oldold_state1.resize(params->num_threads, vector<unsigned char>(L));
     mstat->oldold_state2.resize(params->num_threads, vector<unsigned char>(L));
-    omp_init_lock(&mstat->lock);
 
   }
 
@@ -180,7 +178,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
       exit(EXIT_FAILURE);
     }
     if (params->file_params) {
-      cout << "Reading input parameters from " << params->file_params << " with beta= " << params->beta << endl;
+      cout << "Reading input parameters from " << params->file_params << " with beta = " << params->beta << endl;
       FILE *filep;
       if (!(filep = fopen(params->file_params, "r"))) {
         cerr << "File " << params->file_params << " not found" << params->file_params << endl;
@@ -523,7 +521,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
 
   void Model::mc_chain_ising(vector<unsigned char> & x1, vector<unsigned char> & x2, int s) {
     
-    int numt = omp_get_thread_num();
+    int numt = 0;
     for(int t=0; t < params->Teq; t++) {
       MC_sweep_ising(x1);
       MC_sweep_ising(x2);
@@ -584,10 +582,7 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
 
 
   void Model::mc_chain(vector<unsigned char> & x1, vector<unsigned char> & x2, int s) {
-    //cout << omp_get_thread_num() << endl;
-    // cout << &(J[0]) << " " << omp_get_thread_num() << endl;
-    //printf("Address of x is %p\n", (void **)J);  
-    int numt = omp_get_thread_num();
+    int numt = 0;
     for(int t=0; t < params->Teq; t++) {
       MC_sweep(x1);
       MC_sweep(x2);
@@ -644,17 +639,10 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
   }
 
 
-  void Model::update_synth_msa(vector<unsigned char> & x1, vector<unsigned char> & x2) {
-
-    mstat->synth_msa[omp_get_thread_num()].push_back(x1);
-    mstat->synth_msa[omp_get_thread_num()].push_back(x2);
-  }
 
   void Model::update_corr(int i, int value) {
 
-    omp_set_lock(&mstat->lock);
 	  mstat->corr[i]+=value;
-    omp_unset_lock(&mstat->lock);
   }
 
   bool Model::sample_ising(vector < vector <unsigned char> > & msa) {
@@ -669,7 +657,6 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     if (!params->persistent) 
       init_current_state_ising(msa);
     int s; 
-    #pragma omp parallel for private(s) 
     for(int t = 0; t < params->num_threads; t++) {
       for(s = 0; s < params->Nmc_starts/2; s++) { 
         mc_chain_ising(mstat->curr_state[t][2*s],mstat->curr_state[t][2*s+1], s);
@@ -717,7 +704,6 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     if (!params->persistent) 
       init_current_state(msa);
     int s; 
-    #pragma omp parallel for private(s) 
     for(int t = 0; t < params->num_threads; t++) {
       for(s = 0; s < params->Nmc_starts/2; s++) { 
         mc_chain(mstat->curr_state[t][2*s],mstat->curr_state[t][2*s+1], s);
@@ -878,7 +864,6 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
 
   void Model::update_statistics_lock(vector<unsigned char> & x, FILE * fp, FILE * fe) {
     int Ns = params->Nmc_starts * params->Nmc_config;
-    omp_set_lock(&mstat->lock);
     if(params->ctype == 'i') {
       for(int i = 0; i<L; i++) {
 	      mstat->fm_s[i] += 1.0/Ns * (2.0*x[i]-1.0);
@@ -898,13 +883,11 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
 	      }
       }
     }
-    omp_unset_lock(&mstat->lock);
   }
 
   void Model::update_tm_statistics(vector<unsigned char> & x) {
     int i, j, k, a, b, c;
     int Ns = params->Nmc_starts * params->Nmc_config;
-    omp_set_lock(&mstat->lock);
     for(int ind = 0; ind < int((*tm_index).size()); ind ++) {
       if(params->ctype == 'i') {
 	      i = (*tm_index)[ind][0];
@@ -922,7 +905,6 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
 	          mstat->tm_s[ind] += 1.0/Ns;
       }
     }
-    omp_unset_lock(&mstat->lock);
   }
 
  void Model::compute_third_order_correlations() {

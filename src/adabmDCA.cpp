@@ -10,7 +10,6 @@
 #include <string.h>
 #include <getopt.h>
 #include <stdbool.h>
-#include <omp.h>
 #include <iostream>
 #include <iomanip>
 #include "BMaux.h"
@@ -28,7 +27,6 @@ int main(int argc, char **argv)
   Params params;
   params.read_params(argc, argv);
   srand(params.seed ? params.seed : time(NULL));
-  omp_set_num_threads(params.num_threads);
   Data data(&params);
   Stats mstat;
   params.print_learning_strategy();
@@ -47,7 +45,7 @@ int main(int argc, char **argv)
   char third[1000];
   char corr[1000];
   int iter = 0;
-  int in_time = omp_get_wtime();
+  int in_time = time(NULL);
   bool conv = (params.maxiter > 0) ? false : true;
   Errs errs;
   double lrav = params.lrateJ;
@@ -65,7 +63,7 @@ int main(int argc, char **argv)
     if (iter % params.nprint == 0) {
       cout << setprecision(1);
       cout.unsetf(ios::fixed | ios::scientific);
-      cout << "it: " << iter << " el_time: "  << int(omp_get_wtime() - in_time) << " N: " << params.Nmc_config * params.Nmc_starts * params.num_threads << " Teq: " << params.Teq << " Twait: " << params.Twait;
+      cout << "it: " << iter << " el_time: "  << int(time(NULL) - in_time) << " N: " << params.Nmc_config * params.Nmc_starts * params.num_threads << " Teq: " << params.Teq << " Twait: " << params.Twait;
       cout.setf(ios::scientific);
       cout << " merr_fm: " << errs.merrh << " merr_sm: " << errs.merrJ << " averr_fm: " << errs.averrh << " averr_sm: " << errs.averrJ << " cov_err: " << errs.errnorm;
       cout.unsetf(ios::scientific);
