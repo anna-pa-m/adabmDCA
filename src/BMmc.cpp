@@ -276,80 +276,80 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     int n=0;
     if(!params->file_cc) {
       if(params->dgap) {
-	cout << "Using DGap model" << endl;
-	n = (L*(L-1)*(q-1)*(q-1))/2;
+	      cout << "Using DGap model" << endl;
+	      n = (L*(L-1)*(q-1)*(q-1))/2;
       } else if(params->gapnn) {
-	cout << "Using GapNN model" << endl;
-	n = (L*(L-1)*(q-1)*(q-1))/2 + L - 1;
+	      cout << "Using GapNN model" << endl;
+	      n = (L*(L-1)*(q-1)*(q-1))/2 + L - 1;
       } else if(params->phmm) {
-	cout <<  "Using Hmmer-like model" << endl;
-	n = L - 1;
+	      cout <<  "Using Hmmer-like model" << endl;
+	      n = L - 1;
       } else if(params->rmgauge) {
-	cout << "Using Potts model with Gauge fixing via cc-decimation:";
-	n = (L*(L-1)*(q-1)*(q-1))/2;
+	      cout << "Using Potts model with Gauge fixing via cc-decimation:";
+	      n = (L*(L-1)*(q-1)*(q-1))/2;
       } else {
-	cout << "Using full Potts model" << endl;
-	n = (L*(L-1)*q*q)/2;
+	      cout << "Using full Potts model" << endl;
+	      n = (L*(L-1)*q*q)/2;
       }
       for(int i = 0; i < L; i++) {
-	for(int j = 0; j < L; j++) {
-	  for(int a = 0; a < q; a++) {
-	    for(int b = 0; b < q; b++) {
-	      decJ[i*q + a][j*q + b] = 1;
-	      if(i == j) {
-		      decJ[i*q+a][j*q+b] = 0;
-		      J[i*q+a][j*q+b] = 0.0;
-	      } else if(params->dgap && (a == 0 || b == 0)) {
-		        decJ[i*q + a][j*q + b] = 0;
-		        J[i*q + a][j*q + b] = 0.0;
-	      } else if(params->gapnn) {
-		      if(abs(i - j) > 1 && (a == 0 || b == 0)) {
-		       decJ[i*q + a][j*q + b] = 0;
-		       J[i*q + a][j*q + b] = 0.0;
-		      }
-		      if(abs(i-j)==1 && ((a == 0 && b > 0) || (b == 0 && a > 0))) {
-		        decJ[i*q + a][j*q + b] = 0;
-		        J[i*q + a][j*q + b] = 0.0;
-		      } 
-	      } else if(params->phmm && !(a == 0 && b == 0 && abs(i-j) == 1)) {
-		        decJ[i*q + a][j*q + b] = 0;
-		        J[i*q + a][j*q + b] = 0.0;
-	      } 
-	    }
-	  }
-	}
+	      for(int j = 0; j < L; j++) {
+	        for(int a = 0; a < q; a++) {
+	          for(int b = 0; b < q; b++) {
+	            decJ[i*q + a][j*q + b] = 1;
+	            if(i == j) {
+		            decJ[i*q+a][j*q+b] = 0;
+		            J[i*q+a][j*q+b] = 0.0;
+	            } else if(params->dgap && (a == 0 || b == 0)) {
+		            decJ[i*q + a][j*q + b] = 0;
+		            J[i*q + a][j*q + b] = 0.0;
+	            } else if(params->gapnn) {
+		            if(abs(i - j) > 1 && (a == 0 || b == 0)) {
+		              decJ[i*q + a][j*q + b] = 0;
+		              J[i*q + a][j*q + b] = 0.0;
+		            }
+		            if(abs(i-j)==1 && ((a == 0 && b > 0) || (b == 0 && a > 0))) {
+		              decJ[i*q + a][j*q + b] = 0;
+		              J[i*q + a][j*q + b] = 0.0;
+		            } 
+	            } else if(params->phmm && !(a == 0 && b == 0 && abs(i-j) == 1)) {
+		            decJ[i*q + a][j*q + b] = 0;
+		            J[i*q + a][j*q + b] = 0.0;
+	            } 
+	          }
+	        }
+	      }
       }
       if(params->rmgauge) 
-	remove_gauge_freedom(cov);
+	      remove_gauge_freedom(cov);
     } else {
       cout << "Reading interaction graph from " << params->file_cc << "...";
       fflush(stdout);
       FILE *filep;
       if(!(filep = fopen(params->file_cc, "r"))) {
-	cerr << "File " << params->file_cc << "not found" << endl;
-	exit(EXIT_FAILURE);
+	      cerr << "File " << params->file_cc << "not found" << endl;
+	      exit(EXIT_FAILURE);
       } else {
-	int  i,j, a, b;
-	char buffer[100];
-	double tmp;
-	for(i = 0; i < L*q; i++) {
-	  for(j = 0; j < L*q; j++)
-	    decJ[i][j] = 0;
-	}
-	while(!feof(filep) && fgets(buffer,100, filep) && 
-	      ( sscanf(buffer, "%d %d %d %d %lf \n", &i, &j, &a, &b, &tmp) == 5 || sscanf(buffer, "%d %d %d %d \n", &i, &j, &a, &b) == 4) ) {
-	  decJ[i*q+a][j*q+b] = 1;
-	  decJ[j*q+b][i*q+a] = 1;
-	  n++;
-	}
-	fclose(filep);
-	for(i = 0; i < q*L; i++) {
-	  for(j = 0; j < q*L; j++) {
-	    if(decJ[i][j] == 0) {
-	      J[i][j] = 0.0;
-	    }
-	  }
-	}
+	      int  i,j, a, b;
+	      char buffer[100];
+	      double tmp;
+	      for(i = 0; i < L*q; i++) {
+	        for(j = 0; j < L*q; j++)
+	          decJ[i][j] = 0;
+	      }
+       	while(!feof(filep) && fgets(buffer,100, filep) && 
+	          ( sscanf(buffer, "%d %d %d %d %lf \n", &i, &j, &a, &b, &tmp) == 5 || sscanf(buffer, "%d %d %d %d \n", &i, &j, &a, &b) == 4) ) {
+	        decJ[i*q+a][j*q+b] = 1;
+	        decJ[j*q+b][i*q+a] = 1;
+	        n++;
+	      }
+	      fclose(filep);
+	      for(i = 0; i < q*L; i++) {
+	        for(j = 0; j < q*L; j++) {
+	          if(decJ[i][j] == 0) {
+	            J[i][j] = 0.0;
+	          }
+	        }
+	      }
       }
       cout << "done " << endl << "Number of links " << n << endl;
     }
@@ -1230,6 +1230,7 @@ int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vect
     cout << "Sparsity after decimation is " <<  model_sp << endl;
     return 0;
   }
+
   int Model::decimate_compwise(int c, int iter) {
     int i, j, a, b, index, m = 0;
     double smalln = min(1e-30, params->pseudocount * 0.03);
@@ -1282,6 +1283,55 @@ int Model::compute_errors(vector<float> & fm, vector< vector<float> > & sm, vect
   }
   
   
+  int Model::decimate_ising(int c, int iter) {
+    int i, j, index, m = 0;
+    double num, den;
+    double smalln = min(1e-30, params->pseudocount * 0.03);
+    double maxsdkl = -1e50;
+    cout << "Decimating " << c << " couplings" << endl;
+    for(int k = 0; k < int(tmp_idx.size()); k++) {
+      tmp_idx[k] = k;
+      i = idx[k][0];
+      j = idx[k][1];
+      if(decJ[i][j] > 0) {
+	      m += 1;
+	      if(params->dec_sdkl) {
+	        double auxsm = smalln * rand01() + mstat->sm_s[i][j];
+          num = (1+auxsm)*J[i][j]*exp(-J[i][j]) - (1-auxsm)*J[i][j]*exp(J[i][j]);
+          den = (1+auxsm)*exp(-J[i][j]) + (1-auxsm)*exp(J[i][j]);
+	        sorted_struct[k] = J[i][j]*auxsm - num/den;
+	        sorted_struct[k] += rand01() * smalln;
+	      } else if(params->dec_f) {
+	        sorted_struct[k] = smalln * rand01() + fabs(mstat->sm_s[i][j]);
+	      } else if(params->dec_J) {
+	        sorted_struct[k] = smalln * rand01() + fabs(J[i][j]);
+	      }
+	      maxsdkl = max(maxsdkl, sorted_struct[k]); 
+      } else {
+	      double f = rand01();
+	      sorted_struct[k] =  int(tmp_idx.size()) + f; // to be optimized: elements should be removed instead of putting large numbers
+      }
+    }
+    cout << "Non-zeros parameters before decimation " << m << endl;
+    quicksort(sorted_struct, tmp_idx, 0, int(tmp_idx.size())-1);
+    for(int k = 0; k < c; k++) {
+      index = tmp_idx[k];
+      i = idx[index][0];
+      j = idx[index][1];
+      if(decJ[i][j] == 0)
+	      cerr << "Error: coupling " << i << " " << j << " was already decimated" << endl; 
+        J[i][j] = 0.0;
+        J[j][i] = 0.0;
+        decJ[i][j] = 0;
+        decJ[j][i] = 0;
+    }
+    index = tmp_idx[c];
+    cout << "Smallest sDKL associated with the first kept coupling is " <<  sorted_struct[c] << " (i: " << idx[index][0] << " j: " << idx[index][1]  << " )" << endl;
+    double nref=(L*(L-1))/2;
+    model_sp+=c/nref;
+    cout << "Sparsity after decimation is " <<  model_sp << endl;
+    return 0;
+  }
 
 
 

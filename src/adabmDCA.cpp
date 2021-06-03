@@ -92,10 +92,17 @@ int main(int argc, char **argv)
       data.print_statistics(sec, first, third, corr, model.mstat->corr, model.mstat->fm_s, model.mstat->sm_s, model.mstat->tm_s);
       // Then decimate
       int aux = ceil(model.n_links() / 100);
-      if(params.compwise)
-        model.decimate_compwise(aux, iter);
-      else if(params.blockwise)
-        model.decimate_blockwise(iter);
+      if(params.compwise) {
+        if(params.ctype == 'i')
+          model.decimate_ising(aux, iter);
+        else
+          model.decimate_compwise(aux, iter);
+      } else if(params.blockwise) {
+          if(params.ctype == 'i')
+            model.decimate_ising(aux,iter);
+          else
+            model.decimate_blockwise(iter);
+      }
     }
     if (errs.errnorm < params.conv && !params.compwise && !params.blockwise) {
       conv = true;
