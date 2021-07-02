@@ -25,7 +25,7 @@ class Params {
   char * file_msa, * file_freq, * file_w , * file_params, init, * label, ctype, * file_3points, *file_cc;
   bool print_samples, Metropolis, Gibbs, nprinteq, rmgauge, dgap, gapnn, phmm, blockwise, compwise, persistent, initdata, overwrite, adapt, dec_sdkl, dec_f, dec_J;
   double sparsity, rho, w_th,  regJ1, regJ2, lrateJ, lrateh, conv, pseudocount, beta;
-  int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, Nmc_config, Twait, maxiter, dec_steps, num_threads;
+  int tau, seed, learn_strat, nprint, nprintfile, Teq, Nmc_starts, Nmc_config, Twait, Twait_last, maxiter, dec_steps, num_threads;
   
   Params();
 

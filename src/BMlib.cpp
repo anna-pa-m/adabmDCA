@@ -28,7 +28,7 @@ Params::Params() {
     ctype = 'a';
     file_3points =0;
     file_cc = 0;
-	print_samples = false;
+    print_samples = false;
     Metropolis = true;
     Gibbs = false;
     rmgauge = false;
@@ -45,7 +45,7 @@ Params::Params() {
     dec_f = false;
     dec_J = false;
     sparsity = 0;
-	num_threads = 1;
+    num_threads = 1;
     rho = 0.9; // RMSprop reinforcement (learn_strat = 2)
     w_th = 0.2;
     regJ1 = 0.0;
@@ -65,6 +65,7 @@ Params::Params() {
     Nmc_starts = 1000;
     Nmc_config = 50;
     Twait = 10;
+    Twait_last = 10;
     maxiter = 2000;
     dec_steps = INT_MAX;
   }
