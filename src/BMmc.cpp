@@ -673,8 +673,8 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     double nsi2=(params->Nmc_config-2)*params->Nmc_starts;
     double qin2=nsi2>0 ? mstat->qs[4]/nsi2 : 0;
     double dqin2=nsi2>1 ? sqrt(mstat->qs[5]/(nsi2-1)-mstat->qs[4]*mstat->qs[4]/nsi2/(nsi2-1))/sqrt(nsi2) : 0;
-    int test1=(abs(qext-qin1)<3*sqrt(dqext*dqext+dqin1*dqin1) ? 1 : 0);
-    int test2=(abs(qext-qin2)<3*sqrt(dqext*dqext+dqin2*dqin2) ? 1 : 0);
+    int test1=(abs(qext-qin1)<5*sqrt(dqext*dqext+dqin1*dqin1) ? 1 : 0);
+    int test2=(abs(qext-qin2)<5*sqrt(dqext*dqext+dqin2*dqin2) ? 1 : 0);
     if (params->adapt) {
       if (test1) {
 	      if (params->Twait > 1) 
@@ -712,16 +712,16 @@ Model::Model(int _q, int _L, Params * _params, Stats * _mstat, vector< vector<un
     update_statistics();
     mstat->corr /= params->Nmc_starts;
     double nse=params->Nmc_config*(params->Nmc_starts/2);
-    double qext=mstat->qs[0]/nse;
-    double dqext=sqrt(mstat->qs[1]/(nse-1)-mstat->qs[0]*mstat->qs[0]/nse/(nse-1))/sqrt(nse);
+    double qext = mstat->qs[0]/nse;
+    double dqext=sqrt(mstat->qs[1]/(nse-1) - mstat->qs[0]*mstat->qs[0] /nse/(nse-1) )/ sqrt(nse);
     double nsi1=(params->Nmc_config-1)*params->Nmc_starts;
     double qin1=nsi1>0 ? mstat->qs[2]/nsi1 : 0;
     double dqin1=nsi1>1 ? sqrt(mstat->qs[3]/(nsi1-1)-mstat->qs[2]*mstat->qs[2]/nsi1/(nsi1-1))/sqrt(nsi1) : 0;
     double nsi2=(params->Nmc_config-2)*params->Nmc_starts;
     double qin2=nsi2>0 ? mstat->qs[4]/nsi2 : 0;
     double dqin2=nsi2>1 ? sqrt(mstat->qs[5]/(nsi2-1)-mstat->qs[4]*mstat->qs[4]/nsi2/(nsi2-1))/sqrt(nsi2) : 0;
-    int test1=(abs(qext-qin1)<3*sqrt(dqext*dqext+dqin1*dqin1) ? 1 : 0);
-    int test2=(abs(qext-qin2)<3*sqrt(dqext*dqext+dqin2*dqin2) ? 1 : 0);
+    int test1=(abs(qext-qin1)<5*sqrt(dqext*dqext+dqin1*dqin1) ? 1 : 0);
+    int test2=(abs(qext-qin2)<5*sqrt(dqext*dqext+dqin2*dqin2) ? 1 : 0);
     if (params->adapt) {
       if (test1) {
 	      if (params->Twait > 1) 
