@@ -91,7 +91,7 @@ int main(int argc, char **argv)
         model.compute_third_order_correlations();
       data.print_statistics(sec, first, third, corr, model.mstat->corr, model.mstat->fm_s, model.mstat->sm_s, model.mstat->tm_s);
       // Then decimate
-      int aux = ceil(model.n_links() / 100);
+      int aux = max(1, ceil(model.n_links() / 100));
       if(params.compwise) {
         if(params.ctype == 'i')
           model.decimate_ising(aux, iter);
