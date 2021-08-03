@@ -587,7 +587,7 @@ Data::Data(Params * _params):
 		cov[i][j] = sm[i][j] - fm[i]*fm[j];
       }
     }
-    cout << "Meff: " << Meff << endl;
+    cout << "Meff: " << int(Meff) << endl;
   }
   
   void Data::read_freq() {    
