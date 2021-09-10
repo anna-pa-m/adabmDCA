@@ -166,7 +166,7 @@ where `third_X(i,j,k,a,b,c)` is the third connected moment computed using X of t
 
 ### Available maximum entropy models
 
-`adabmDCA` gives the possibility of fitting a partial set of observables associated with the `-` symbols; one possibility is the so-called `pseudo Hidden Markov Model` (see [Phys. Rev. E](https://link.aps.org/doi/10.1103/PhysRevE.102.062409))
+`adabmDCA` gives the possibility of fitting a partial set of observables associated with the `-` symbols; one possibility is the so-called `pseudo Hidden Markov Model` (see [here](https://link.aps.org/doi/10.1103/PhysRevE.102.062409))
 
 <img src="https://latex.codecogs.com/gif.latex?\mathcal{H}_{phmm}(\boldsymbol{S}&space;|&space;\boldsymbol{J},&space;\boldsymbol{h})&space;=&space;-&space;\sum_{i,i&plus;1}J_{i,i&plus;1}(-,-)&space;\delta_{S_i,-}&space;\delta_{S_{i&plus;1},-}&space;-&space;\sum_{i}h_{i}(S_{i})" title="\mathcal{H}_{phmm}(\boldsymbol{S} | \boldsymbol{J}, \boldsymbol{h}) = - \sum_{i,i+1}J_{i,i+1}(-,-) \delta_{S_i,-} \delta_{S_{i+1},-} - \sum_{i}h_{i}(S_{i})" />
 
@@ -188,7 +188,7 @@ There are three choices for the score:
   - the absolute value of the coupling `J(i,j,a,b)` (use `-V` flag) 
   - the symmetric Kullbak-Leibler distance between the models with or without a coupling. 
   
-The recommended procedure is the last one which corresponds to an information-based and component-wise pruning, achievable using the `-W` flag. A block-wise pruning can be set using `-B` (not yet implemented). For more details about the procedure and the performances of the pruned models, see [arXiv](https://arxiv.org/abs/2011.11259). 
+The recommended procedure is the last one which corresponds to an information-based and component-wise pruning, achievable using the `-W` flag. A block-wise pruning can be set using `-B` (not yet implemented). For more details about the procedure and the performances of the pruned models, see [here](https://journals.aps.org/pre/abstract/10.1103/PhysRevE.104.024407). 
 
 #### Remove gauge invariance
 
