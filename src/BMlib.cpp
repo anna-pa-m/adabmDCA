@@ -426,7 +426,58 @@ Data::Data(Params * _params):
     load_third_order_indices();
   }
 
-  void Data::read_msa() {
+void Data::read_msa() {
+	char * filename=params->file_msa;
+    	cout << "Reading MSA from " << params->file_msa << endl;
+    	FILE * filemsa;
+    	char ch;
+    	int readseq = 0, newseq = 0;
+    	if(!filename || !(filemsa = fopen(filename, "r"))) {
+		cerr << "I couldn't open " << filename << endl;
+		exit(EXIT_FAILURE);
+	}
+	vector<unsigned char> auxseq;
+	M = 0;
+	L = 0;
+	msa.clear();
+	while((ch = fgetc(filemsa)) != EOF) {
+		if (ch == '>') {
+			newseq = 1;
+			readseq = 0;
+			if (L == 0 && int(auxseq.size()) > 0) {
+		 	 	L = int(auxseq.size());
+			} else if (L!=int(auxseq.size())) {
+		 	 	cout<<"MSA reading error!"<<endl;
+		 	 	exit(1);
+			}
+			if(int(auxseq.size()) > 0)
+				msa.push_back(auxseq);
+		} else {
+			if (ch == '\n' && newseq == 1) {
+				readseq = 1;
+				newseq = 0;
+				auxseq.clear();
+			} else if (ch != '\n' && newseq == 0 && readseq == 1) {
+				if(params->ctype == 'a')
+		 	 		auxseq.push_back(convert_char_amino(ch));
+				else if(params->ctype == 'n')
+		 	 		auxseq.push_back(convert_char_nbase(ch));
+				else if(params->ctype == 'i')
+		 	 		auxseq.push_back(convert_char_ising(ch));
+				else if(params->ctype == 'e')
+		 	 		auxseq.push_back(convert_char_epi(ch));
+			}
+		}
+	}
+	if(int(auxseq.size()) > 0)
+		msa.push_back(auxseq); // last sequence
+	M = int(msa.size());
+	cout << "Reading alignment completed." << endl << "M = " << M << " L = " << L << " q = " << q << endl;
+	fclose(filemsa);
+  }
+
+/*
+  void Data::read_msa_old() {
     char * filename=params->file_msa;
     cout << "Reading MSA from " << params->file_msa << endl;
     FILE * filemsa;
@@ -472,6 +523,7 @@ Data::Data(Params * _params):
     cout << "Reading alignment completed." << endl << "M = " << M << " L = " << L << " q = " << q << endl;
     fclose(filemsa);
   }
+  */
 
   void Data::compute_w() {
     w.clear();
