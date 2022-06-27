@@ -231,7 +231,7 @@ Params::Params() {
 				cout << "-i : (number) Maximum number of iterations, default: " << maxiter << endl;
 				cout << "-l : (number) Threshold used within the reweighting process, default: " << w_th << endl;
 				cout << "-d : (number) Pseudo-count, default: 1/Meff" << endl;
-				cout << "-O : (number) Number of threads" << endl;
+				//cout << "-O : (number) Number of threads" << endl;
 				cout << "### Additional I/O files ###" << endl;
 				cout << "-q : (file) Read frequencies from file - no MSA" << endl;
 				cout << "-w : (file) weights file" << endl;
