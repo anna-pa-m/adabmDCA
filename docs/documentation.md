@@ -134,7 +134,7 @@ Let us call the configuration of chain `i` sampled after `n` steps of the MCMC a
   
 ### Sampling
 
-`adabmDCA` can be easily used to sample a given model. To do this, one has to give the parameters file using the flag `-p` and set the maximum number of iterations used for the training as 0, that is `-i 0`. A FASTA or a frequency input file must be specified also for this procedure. The sampled configurations, and the energies associated with them, are stored in a FASTA file whose names must be given using the following flag. Energies compare in the sequences name.
+`adabmDCA` can be easily used to sample a given model. To do this, one has to give the parameters file using the flag `-p` and set the maximum number of iterations used for the training as 0, that is `-i 0`. A FASTA or a frequency input file must be specified also for this procedure. The sampled configurations, and the energies associated with them, are stored in a FASTA file whose names must be given using the following flag. Energies are written in the sequences name.
 ```
 -S sample_file 
 ```
