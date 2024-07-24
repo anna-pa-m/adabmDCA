@@ -270,11 +270,12 @@ int Params::read_params(int &argc, char **argv)
 			cout << "-f : (file) MSA alignment in FASTA format" << endl;
 			cout << "-q : (optional file) Read frequencies from file - alternative to MSA" << endl;
 			cout << "-w : (optional file) weights file" << endl;
-			cout << "-b : (letter) Alphabet, default: a. " << endl
+			cout << "-b : (char) Pre-defined alphabet, default: a. " << endl
 				 << "\ta : amino-acids. " << endl
 				 << "\tn : nucleic acids. " << endl
 				 << "\ti : Ising " << endl
 				 << "\te : epigenetic data. " << endl;
+			cout << "-b : (string) User-defined alphabet." << endl; 
 			cout << "-l : (number) Threshold used within the reweighting process, default: " << w_th << endl;
 			cout << endl;
 

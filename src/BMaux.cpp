@@ -183,16 +183,16 @@ int convert_char_nbase(char a)
 	case 'A':
 		i = 1;
 		break;
-	case 'U':
-		i = 2;
-		break;
-	case 'T':
-		i = 2;
-		break;
 	case 'C':
-		i = 3;
+		i = 2;
 		break;
 	case 'G':
+		i = 3;
+		break;
+	case 'U':
+		i = 4;
+		break;
+	case 'T':
 		i = 4;
 		break;
 	default:
@@ -300,9 +300,18 @@ int convert_char_potts(char a)
 	return (int)(a - '0');
 }
 
+int convert_char_adhoc(char a, char* abc)
+{
+	std::string abcd;
+	abcd = abc;
+	return (int)abcd.find(a);
+}
+
 int convert_char(char ch, char *ctype)
 {
 	int ris;
+	std::string abc;
+	abc = ctype;
 	if (!strcmp(ctype, "a"))
 		ris = convert_char_amino(ch);
 	else if (!strcmp(ctype, "n"))
@@ -313,6 +322,8 @@ int convert_char(char ch, char *ctype)
 		ris = convert_char_epi(ch);
 	else if (isdigit(*ctype))
 		ris = convert_char_potts(ch);
+	else if (abc.length() > 1)
+		ris = convert_char_adhoc(ch, ctype);
 	else
 	{
 		cerr << "Error in alphabet specification" << endl;
@@ -325,6 +336,8 @@ int print_alphabet(char *ctype)
 {
 
 	int q = 0;
+	std::string abc;
+	abc = ctype;
 	if (!strcmp(ctype, "a"))
 	{
 		cout << "Using alphabet: -ACDEFGHIKLMNPQRSTVWY" << endl;
@@ -332,7 +345,7 @@ int print_alphabet(char *ctype)
 	}
 	else if (!strcmp(ctype, "n"))
 	{
-		cout << "Using alphabet: -AUCG" << endl;
+		cout << "Using alphabet: -ACGU" << endl;
 		q = 5;
 	}
 	else if (!strcmp(ctype, "i"))
@@ -350,6 +363,11 @@ int print_alphabet(char *ctype)
 	{
 		cout << "Using alphabet: Potts with q = " << q << endl;
 	}
+	else if (abc.length() > 1)
+	{
+		cout << "Using alphabet: " << abc << endl;
+		q = abc.length();
+	}
 	else
 	{
 		cerr << "Use 'a' for amino-acids, 'n' for nitrogenous bases or 'i' for Ising-like variables" << endl;
@@ -362,6 +380,8 @@ vector<char> alphabet(char *ctype)
 {
 
 	vector<char> ris;
+	std::string abc;
+	abc = ctype;
 	int q;
 	if (!strcmp(ctype, "a"))
 	{
@@ -370,7 +390,7 @@ vector<char> alphabet(char *ctype)
 	}
 	else if (!strcmp(ctype, "n"))
 	{
-		char app[] = "-AUCG";
+		char app[] = "-ACGU";
 		ris = vector<char>(app, app + sizeof(app) / sizeof(char));
 	}
 	else if (!strcmp(ctype, "i"))
@@ -388,6 +408,11 @@ vector<char> alphabet(char *ctype)
 		ris.clear();
 		for (int i = 0; i < q; i++)
 			ris.push_back(i + '0');
+	}
+	else if (abc.length() > 1)
+	{
+		ris.resize(abc.length());
+		memcpy(&ris[0], ctype, abc.length());
 	}
 	else
 	{
