@@ -58,7 +58,7 @@ where:
 
 ## Input/Output files
 
-`adabmDCA` takes as input the set of configurations in [FASTA](https://en.wikipedia.org/wiki/FASTA_format). By default, the program assumes to read protein sequences; alternative alphabets can be set by using the `-b` flag followed by the letter `n` for RNA sequences or `i` for Ising variables. 
+`adabmDCA` takes as input the set of configurations in [FASTA](https://en.wikipedia.org/wiki/FASTA_format). By default, the program assumes to read protein sequences; alternative alphabets can be set by using the `-b` flag followed by the letter `n` for RNA sequences or `i` for Ising variables. For user-defined alphabet use `-b $string` where `$string` contains the alphabet.
 Notice that the spin configurations must be reported as `0/1` sequences and the `0` character is interpreted as `-1` by the program.
 
 Every X iteration (X is specified by `-m X`), and at convergence, `adabmDCA` prints to file the one-site and two-site statistics of the data/model as well as the set of parameters of the Potts model and the (average corrected) Frobenius norms associated with them. To restore a stopped run from the last temporarily saved files, use the flag `--restore` as
